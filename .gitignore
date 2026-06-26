@@ -1,0 +1,41 @@
+# ── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# ── Virtual environment (machine-specific, large) ─────────
+.venv/
+venv/
+
+# ── Secrets / credentials (NEVER commit) ──────────────────
+.env
+*.key
+*.pem
+credentials.json
+.netrc
+
+# ── Data (too big for git; rebuilt from config) ───────────
+data/
+*.tif
+*.tiff
+*.nc
+*.zarr/
+*.h5
+*.hdf
+
+# ── Model weights / checkpoints / run artifacts ───────────
+*.pt
+*.pth
+*.ckpt
+*.onnx
+checkpoints/
+artifacts/
+logs/
+*.log
+
+# ── OS / editor cruft ─────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

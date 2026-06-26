@@ -1,0 +1,3 @@
+# Normalise line endings: store as LF in the repo, check out native.
+# Prevents noisy CRLF/LF diffs when working on Windows.
+* text=auto
