@@ -1,0 +1,44 @@
+# Single source of truth for AOIs, dates, variables, and paths.
+# Values marked TODO are deferred until after EDA (see brief section 10.8).
+
+project:
+  name: ecosystem-state-forecaster
+  target: ndvi          # also compute 'ndvi_anomaly' for comparison
+  horizon: 1            # steps ahead
+  cadence: monthly
+
+imagery:
+  source: dea                 # Digital Earth Australia
+  products: [ga_s2am_ard_3, ga_s2bm_ard_3]   # Sentinel-2A/2B, Collection 3
+  resolution_m: 10
+  bands: [nbart_red, nbart_nir_1]            # for NDVI; extend as needed
+  cloud_mask: [oa_fmask, s2cloudless]
+
+biomes:
+  sunshine_coast_hinterland:   # build first
+    bbox: null                 # TODO after EDA: [minx, miny, maxx, maxy]
+    crs: EPSG:4326
+  daintree:        { bbox: null }   # TODO
+  alice_springs:   { bbox: null }   # TODO
+  kosciuszko:      { bbox: null }   # TODO
+
+drivers:
+  rainfall: silo
+  temperature: silo
+  soil_moisture: era5_land
+  fire: modis_burned_area
+
+splits:
+  temporal:
+    method: walk_forward
+    block_months: 3
+    n_test_folds: 4       # provisional; confirm after EDA
+    embargo_months: 3     # ~ feature lookback
+  spatial:
+    n_test_blocks: 3
+    block_size_m: null    # TODO: derive from variogram range
+    buffer_m: null        # TODO: derive from variogram range
+
+paths:
+  data: data/             # gitignored
+  artifacts: artifacts/   # gitignored
