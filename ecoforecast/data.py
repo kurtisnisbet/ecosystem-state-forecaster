@@ -53,25 +53,35 @@ def search_scenes(
         time_range: str,
         collections: list[str] = S2_COLLECTIONS,
 ) -> list:
-    
     """Search DEA's STAC catalogue for Sentinel-2 scenes.
 
-    Parameters:
-    bbox: [min_lon, min_lat, max_lon, max_lat] in EPSG:4326
-    time_range: ISO date range, e.g. "2023-01-01/2023-12-31"
-    collections: STAC collection ids to search.
+    DEA's STAC caps the items returned by a single search, silently truncating
+    long date ranges. To get the full record, we split the request into
+    one-year windows and concatenate the results.
 
-    Returns:
-    list of STAC items intersecting with AOI and time range.
+    Parameters
+    ----------
+    bbox : [min_lon, min_lat, max_lon, max_lat] in EPSG:4326.
+    time_range : ISO range "YYYY-MM-DD/YYYY-MM-DD".
+    collections : STAC collection ids to search.
+
+    Returns
+    -------
+    list of STAC items across the full range.
     """
-
     catalog = pystac_client.Client.open(DEA_STAC_URL)
-    search = catalog.search(
-        collections=collections,
-        bbox=bbox,
-        datetime=time_range,
-    )
-    return list(search.items())
+    start_year = int(time_range[:4])
+    end_year = int(time_range.split("/")[1][:4])
+
+    items = []
+    for year in range(start_year, end_year + 1):
+        search = catalog.search(
+            collections=collections,
+            bbox=bbox,
+            datetime=f"{year}-01-01/{year}-12-31",
+        )
+        items.extend(search.items())
+    return items
 
 def compute_ndvi(
     ds: xr.Dataset,
