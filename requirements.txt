@@ -1,6 +1,5 @@
-# Core dependencies for the Ecosystem State Forecaster (v1, data + EDA phase).
-# Pinned for reproducibility. Modelling libs (scikit-learn, xgboost, torch)
-# will be added when we reach those stages.
+# Core dependencies for the Ecosystem State Forecaster (v1).
+# Pinned for reproducibility. torch will be added for the ConvLSTM stage.
 
 # ── Cube core ─────────────────────────────────────────────
 numpy==2.4.6
@@ -22,3 +21,10 @@ odc-stac==0.5.2
 matplotlib==3.11.0
 jupyterlab==4.6.0
 ipykernel==7.3.0
+
+# ── Modelling ─────────────────────────────────────────────
+scikit-learn==1.7.2
+lightgbm==4.6.0
+
+# ── Testing ───────────────────────────────────────────────
+pytest==9.1.1

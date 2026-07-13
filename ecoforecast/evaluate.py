@@ -122,6 +122,51 @@ def _paired(obs, pred, time_mask, space_mask):
     return o.where(valid), p.where(valid), int(valid.sum())
 
 
+def score_cells(
+    obs: xr.DataArray,
+    predictions: dict[str, xr.DataArray],
+    train_time: xr.DataArray,
+    test_time: xr.DataArray,
+    spatial_train: xr.DataArray,
+    spatial_test: xr.DataArray,
+    baselines: tuple[str, ...] = ("persistence", "climatology"),
+    fold: int = 0,
+    label: str = "",
+) -> list[dict]:
+    """Score every predictor in the four space x time cells for one fold.
+
+    Cells: future/seen time (holdout vs training months) x seen/unseen locations
+    (spatial train vs held-out blocks). `predictions` must include the baseline
+    keys. Returns row dicts (RMSE, R², n, skill vs each baseline). Kept separate
+    from `evaluate_folds` so a per-fold-retrained model can score each fold with
+    its own prediction cube.
+    """
+    cells = [
+        ("future", "seen", test_time, spatial_train),
+        ("future", "unseen", test_time, spatial_test),
+        ("seen", "seen", train_time, spatial_train),
+        ("seen", "unseen", train_time, spatial_test),
+    ]
+    rows = []
+    for time_lbl, space_lbl, tmask, smask in cells:
+        base_rmse = {}
+        for b in baselines:
+            bo, bp, _ = _paired(obs, predictions[b], tmask, smask)
+            base_rmse[b] = rmse(bp, bo)
+        for name, pred in predictions.items():
+            o, p, n = _paired(obs, pred, tmask, smask)
+            row = {
+                "fold": fold, "label": label,
+                "time": time_lbl, "space": space_lbl,
+                "predictor": name, "n": n,
+                "rmse": rmse(p, o), "r2": r2(p, o),
+            }
+            for b in baselines:
+                row[f"skill_vs_{b}"] = skill_score(row["rmse"], base_rmse[b])
+            rows.append(row)
+    return rows
+
+
 def evaluate_folds(
     obs: xr.DataArray,
     predictions: dict[str, xr.DataArray],
@@ -130,38 +175,13 @@ def evaluate_folds(
     spatial_test: xr.DataArray,
     baselines: tuple[str, ...] = ("persistence", "climatology"),
 ) -> pd.DataFrame:
-    """Score every predictor in each of the four space x time cells, per fold.
-
-    Cells: future/seen time (holdout vs training months) x seen/unseen locations
-    (spatial train vs held-out blocks). Each row carries RMSE, R², sample count,
-    and skill vs each baseline. `predictions` must include the baseline keys.
-    """
-    cells = [
-        ("future", "seen", "test", spatial_train),
-        ("future", "unseen", "test", spatial_test),
-        ("seen", "seen", "train", spatial_train),
-        ("seen", "unseen", "train", spatial_test),
-    ]
+    """Score fixed predictions across every walk-forward fold (see `score_cells`)."""
     rows = []
     for fi, fold in enumerate(folds):
-        tmasks = {"train": fold["train"], "test": fold["test"]}
-        for time_lbl, space_lbl, tkey, smask in cells:
-            tmask = tmasks[tkey]
-            base_rmse = {}
-            for b in baselines:
-                bo, bp, _ = _paired(obs, predictions[b], tmask, smask)
-                base_rmse[b] = rmse(bp, bo)
-            for name, pred in predictions.items():
-                o, p, n = _paired(obs, pred, tmask, smask)
-                row = {
-                    "fold": fi, "label": fold["label"],
-                    "time": time_lbl, "space": space_lbl,
-                    "predictor": name, "n": n,
-                    "rmse": rmse(p, o), "r2": r2(p, o),
-                }
-                for b in baselines:
-                    row[f"skill_vs_{b}"] = skill_score(row["rmse"], base_rmse[b])
-                rows.append(row)
+        rows.extend(score_cells(
+            obs, predictions, fold["train"], fold["test"],
+            spatial_train, spatial_test, baselines, fold=fi, label=fold["label"],
+        ))
     return pd.DataFrame(rows)
 
 
