@@ -28,3 +28,10 @@ lightgbm==4.6.0
 
 # ── Testing ───────────────────────────────────────────────
 pytest==9.1.1
+
+# ── Deep learning (ConvLSTM) ──────────────────────────────
+# The default wheel pulls a large CUDA stack. Install the build for your
+# hardware instead:
+#   CPU:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   GPU:  https://pytorch.org/get-started/locally/
+torch==2.13.0
