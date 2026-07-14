@@ -9,8 +9,7 @@ Status: the v1 core runs end to end on Digital Earth Australia Sentinel-2
 data for a Sunshine Coast hinterland area (130 monthly steps, 2015 to 2026, at
 100 m). Gradient-boosted trees and a ConvLSTM both beat persistence by a clear
 margin, but neither beats climatology, which is the expected result for NDVI
-(see Results). Still to come: environmental drivers, native 10 m resolution, and
-the other three biomes.
+(see Results). Still to come: native 10 m resolution and the other three biomes.
 
 ## Problem
 
@@ -117,6 +116,15 @@ table, so the gain is not an artefact of one easy split.
 The forecast trace is a single 100 m pixel and is noisy month to month; the
 table is the reliable summary.
 
+### Drivers
+
+Lagged SILO rainfall was tested as an extra input and did not help. The
+gradient-boosted trees went from 0.110 to 0.115 RMSE and the ConvLSTM was
+unchanged, so recent NDVI already carries most of the vegetation's response to
+recent weather at this monthly, 100 m, one-step-ahead setting. Rainfall stays in
+the code as an optional input, off by default, and the driver machinery is ready
+for soil moisture and fire.
+
 ## Repository layout
 
 ```
@@ -190,8 +198,8 @@ pytest -q
 
 ## Roadmap
 
-- Add drivers: rainfall and temperature (SILO), soil moisture (ERA5-Land), fire
-  (MODIS), and terrain from a DEM.
+- Extend drivers: rainfall is wired in (SILO) but did not help; try soil moisture
+  (ERA5-Land), fire (MODIS), and terrain from a DEM.
 - Move from 100 m to native 10 m on the GPU.
 - Extend to the other biomes: Daintree, Alice Springs, Kosciuszko.
 - Later: a graph-based model, an ensemble with uncertainty, and a small

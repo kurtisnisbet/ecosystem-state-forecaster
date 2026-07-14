@@ -21,6 +21,9 @@ odc-stac==0.5.2
 pyyaml==6.0.2
 netcdf4==1.7.2
 
+# ── Drivers (SILO on the AWS open-data bucket) ────────────
+s3fs==2026.6.0
+
 # ── Exploration & viz ─────────────────────────────────────
 matplotlib==3.11.0
 jupyterlab==4.6.0
@@ -34,8 +37,9 @@ lightgbm==4.6.0
 pytest==9.1.1
 
 # ── Deep learning (ConvLSTM) ──────────────────────────────
-# The default wheel pulls a large CUDA stack. Install the build for your
-# hardware instead:
-#   CPU:  pip install torch --index-url https://download.pytorch.org/whl/cpu
-#   GPU:  https://pytorch.org/get-started/locally/
-torch==2.13.0
+# Install the build for your hardware FIRST, so this line doesn't pull the
+# default CUDA stack over it:
+#   CPU:            pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   NVIDIA (CUDA):  pip install torch --index-url https://download.pytorch.org/whl/cu128
+#   see https://pytorch.org/get-started/locally
+torch>=2.11

@@ -42,3 +42,40 @@ def test_walk_forward_gbt_returns_expected_schema(cube):
     assert {"skill_vs_persistence", "skill_vs_climatology"} <= set(res.columns)
     assert oos.sizes == cube.sizes
     assert not importance.empty
+
+
+def test_walk_forward_gbt_handles_descending_float_coords():
+    # Real DEA cubes have a descending, floating-point y (projected metres);
+    # the prediction must stay aligned to the source grid, not re-sorted.
+    time = pd.date_range("2020-01-01", periods=36, freq="MS")
+    season = 0.2 * np.sin(2 * np.pi * (time.month.values - 1) / 12)
+    data = 0.5 + season[:, None, None] + np.random.default_rng(0).normal(0, 0.02, (36, 12, 10))
+    cube = xr.DataArray(
+        data.astype("float32"), dims=("time", "y", "x"),
+        coords={
+            "time": time,
+            "y": np.linspace(-3_000_000.0, -3_003_000.0, 12),  # descending
+            "x": np.linspace(1_900_000.0, 1_902_000.0, 10),
+        },
+        name="ndvi",
+    )
+    folds = walk_forward_splits(cube["time"], n_test_folds=2)
+    train, test, _ = spatial_blocks(cube, block_size=4, n_test_blocks=1, seed=0)
+    res, oos, _ = walk_forward_gbt(cube, folds, train, test, params=dict(n_estimators=20))
+    assert "gbt" in set(res["predictor"])
+    assert np.array_equal(oos["y"].values, cube["y"].values)
+
+
+def test_walk_forward_gbt_uses_driver_features():
+    time = pd.date_range("2020-01-01", periods=36, freq="MS")
+    rng = np.random.default_rng(1)
+    rain = 50 + rng.normal(0, 10, (36, 8, 8))
+    season = 0.2 * np.sin(2 * np.pi * (time.month.values - 1) / 12)
+    data = 0.5 + season[:, None, None] + 0.001 * rain + rng.normal(0, 0.02, (36, 8, 8))
+    coords = {"time": time, "y": range(8), "x": range(8)}
+    cube = xr.DataArray(data.astype("float32"), dims=("time", "y", "x"), coords=coords, name="ndvi")
+    drivers = xr.Dataset({"rain": xr.DataArray(rain.astype("float32"), dims=("time", "y", "x"), coords=coords)})
+    folds = walk_forward_splits(cube["time"], n_test_folds=2)
+    train, test, _ = spatial_blocks(cube, block_size=4, n_test_blocks=1, seed=0)
+    _res, _oos, importance = walk_forward_gbt(cube, folds, train, test, drivers=drivers, params=dict(n_estimators=20))
+    assert "rain" in importance.index

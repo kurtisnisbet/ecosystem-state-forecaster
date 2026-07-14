@@ -20,6 +20,11 @@ build:                          # settings for scripts/build_cube.py
   resolution_m: 100             # scaled-back local run; 10 = native (Azure/GPU target)
   cache: data/cube_sunshine_coast.nc   # gitignored
 
+drivers_build:                  # settings for scripts/build_drivers.py
+  use: false                     # ablation: lagged rainfall did not help one-step NDVI; off by default
+  silo_variables: [monthly_rain]   # add max_temp, min_temp (daily, heavier) later
+  cache: data/drivers_sunshine_coast.nc   # gitignored
+
 biomes:
   sunshine_coast_hinterland:   # build first
     bbox: [152.80, -26.80, 152.90, -26.68]   # provisional; refine after EDA/variogram

@@ -39,6 +39,13 @@ def main():
         raise SystemExit(f"No cube at {cache} — run scripts/build_cube.py first.")
 
     ndvi = xr.open_dataarray(cache)
+    drivers = None
+    dcfg = cfg.get("drivers_build", {})
+    dpath = ROOT / dcfg.get("cache", "data/__no_drivers__.nc")
+    if dcfg.get("use", False) and dpath.exists():
+        from ecoforecast.drivers import lag_drivers
+        drivers = lag_drivers(xr.open_dataset(dpath))  # prior-month values only
+
     tsp, ssp = cfg["splits"]["temporal"], cfg["splits"]["spatial"]
     folds = walk_forward_splits(ndvi["time"], tsp["block_months"], tsp["n_test_folds"], tsp["embargo_months"])
     strain, stest, _ = spatial_blocks(ndvi, ssp["block_size_px"], ssp["n_test_blocks"], ssp["buffer_px"], seed=1)
@@ -46,14 +53,17 @@ def main():
     print(f"cube {dict(ndvi.sizes)}  cloud/gap NaN {float(ndvi.isnull().mean()):.1%}")
     print(f"folds: {[f['label'] for f in folds]}")
     print(f"spatial px  train {int(strain.sum())}  test {int(stest.sum())}  buffer {int((~strain & ~stest).sum())}")
+    print(f"drivers: {list(drivers.data_vars) if drivers is not None else 'none'}")
 
     # GBT scores itself + both baselines; take those rows.
-    res_gbt, oos_gbt, importance = walk_forward_gbt(ndvi, folds, strain, stest)
+    res_gbt, oos_gbt, importance = walk_forward_gbt(ndvi, folds, strain, stest, drivers=drivers)
     frames, oos = [res_gbt], {"gbt": oos_gbt}
 
     try:
+        import torch
         from ecoforecast.models.convlstm import walk_forward_convlstm
-        res_cl, oos_cl, _ = walk_forward_convlstm(ndvi, folds, strain, stest, seq_len=6, hidden=16, epochs=100)
+        print(f"ConvLSTM on {'GPU (' + torch.cuda.get_device_name(0) + ')' if torch.cuda.is_available() else 'CPU'}...")
+        res_cl, oos_cl, _ = walk_forward_convlstm(ndvi, folds, strain, stest, drivers=drivers, seq_len=6, hidden=16, epochs=100)
         frames.append(res_cl[res_cl["predictor"] == "convlstm"])
         oos["convlstm"] = oos_cl
     except Exception as exc:
@@ -77,7 +87,7 @@ def main():
 
 def _best_pixel(ndvi):
     valid = ndvi.notnull().sum("time")
-    flat = int(valid.argmax())
+    flat = int(np.argmax(valid.values))
     return np.unravel_index(flat, valid.shape)
 
 

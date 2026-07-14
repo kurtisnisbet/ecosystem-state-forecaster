@@ -48,13 +48,15 @@ def build_feature_table(
     target: xr.DataArray,
     lags: tuple[int, ...] = LAGS,
     static: xr.Dataset | None = None,
+    drivers: xr.Dataset | None = None,
     dropna: bool = True,
 ) -> pd.DataFrame:
     """Tidy (time, y, x) design matrix for the tabular models.
 
-    Columns: `target`, `lag{k}` (target at t-k), `month_sin`/`month_cos`, and
-    any static layers (terrain, biome id) broadcast over time. With dropna, the
-    first max(lags) steps and cloud-masked pixels are removed.
+    Columns: `target`, `lag{k}` (target at t-k), `month_sin`/`month_cos`, any
+    static layers (terrain, biome id) broadcast over time, and any time-varying
+    `drivers` (rainfall, temperature) already aligned to the grid. With dropna,
+    the first max(lags) steps and cloud-masked pixels are removed.
     """
     feats = xr.Dataset({"target": target})
     for k in lags:
@@ -66,6 +68,9 @@ def build_feature_table(
 
     if static is not None:
         for name, layer in static.items():
+            feats[name] = layer
+    if drivers is not None:
+        for name, layer in drivers.items():
             feats[name] = layer
 
     df = feats.to_dataframe().reset_index()

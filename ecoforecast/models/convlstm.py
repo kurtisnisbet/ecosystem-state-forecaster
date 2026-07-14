@@ -30,11 +30,21 @@ DEFAULTS = dict(seq_len=6, hidden=16, epochs=25, lr=5e-3, seed=0)
 
 
 # ── data plumbing (no torch) ────────────────────────────────────────────────
-def channel_stack(ndvi: xr.DataArray, static: xr.Dataset | None = None) -> np.ndarray:
+def _standardize(a: np.ndarray) -> np.ndarray:
+    """Zero-mean, unit-variance (NaN -> 0), so off-scale drivers or terrain do not
+    swamp the 0-1 NDVI channels in the ConvLSTM."""
+    mean = float(np.nanmean(a))
+    std = float(np.nanstd(a)) or 1.0
+    return np.nan_to_num((a - mean) / std, nan=0.0).astype("float32")
+
+
+def channel_stack(ndvi: xr.DataArray, static: xr.Dataset | None = None,
+                  drivers: xr.Dataset | None = None) -> np.ndarray:
     """(time, y, x) NDVI -> (time, channel, y, x) input stack.
 
-    Channels: cloud-filled NDVI, validity mask, month sin, month cos, then any
-    static layers broadcast over time.
+    Channels: cloud-filled NDVI, validity mask, month sin, month cos, any static
+    layers broadcast over time, then any time-varying drivers already aligned to
+    the grid.
     """
     v = ndvi.values
     t, h, w = v.shape
@@ -47,8 +57,11 @@ def channel_stack(ndvi: xr.DataArray, static: xr.Dataset | None = None) -> np.nd
     ]
     if static is not None:
         for name in static.data_vars:
-            layer = static[name].values.astype("float32")
+            layer = _standardize(static[name].values.astype("float32"))
             chans.append(np.broadcast_to(layer[None], (t, h, w)).astype("float32"))
+    if drivers is not None:
+        for name in drivers.data_vars:
+            chans.append(_standardize(drivers[name].values))
     return np.stack(chans, axis=1)
 
 
@@ -127,34 +140,38 @@ def fit_predict_fold(
     train_time: xr.DataArray,
     spatial_train: xr.DataArray,
     static: xr.Dataset | None = None,
+    drivers: xr.Dataset | None = None,
     seq_len: int = DEFAULTS["seq_len"],
     hidden: int = DEFAULTS["hidden"],
     epochs: int = DEFAULTS["epochs"],
     lr: float = DEFAULTS["lr"],
     seed: int = DEFAULTS["seed"],
+    device: str | None = None,
 ):
     """Train on train-time x train-space x valid pixels; predict the whole cube.
 
-    Returns the prediction cube (NaN in the first `seq_len` months) and the
-    per-epoch training loss.
+    Uses the GPU automatically when one is available (pass `device` to force
+    "cuda" or "cpu"). Returns the prediction cube (NaN in the first `seq_len`
+    months) and the per-epoch training loss.
     """
     torch = _torch()
+    dev = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
     torch.manual_seed(seed)
 
-    stack = channel_stack(ndvi, static)
+    stack = channel_stack(ndvi, static, drivers)
     target = ndvi.values.astype("float32")
     x, y, idx = make_sequences(stack, target, seq_len)
 
-    is_train_sample = train_time.values[idx]
+    tr = np.where(train_time.values[idx])[0]
     space = spatial_train.values.astype("float32")
+    valid = (~np.isnan(y)).astype("float32")
+    y_filled = np.nan_to_num(y, nan=0.0)
 
-    xt = torch.from_numpy(x)
-    yt = torch.from_numpy(np.nan_to_num(y, nan=0.0))
-    weight = torch.from_numpy((~np.isnan(y)).astype("float32")) * torch.from_numpy(space)[None]
-    tr = np.where(is_train_sample)[0]
-    x_tr, y_tr, w_tr = xt[tr], yt[tr], weight[tr]
+    x_tr = torch.from_numpy(x[tr]).to(dev)
+    y_tr = torch.from_numpy(y_filled[tr]).to(dev)
+    w_tr = torch.from_numpy(valid[tr] * space[None]).to(dev)
 
-    model = make_convlstm(stack.shape[1], hidden)
+    model = make_convlstm(stack.shape[1], hidden).to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     history = []
     for _ in range(epochs):
@@ -167,7 +184,7 @@ def fit_predict_fold(
 
     model.eval()
     with torch.no_grad():
-        pred_all = model(xt).numpy()
+        pred_all = model(torch.from_numpy(x).to(dev)).cpu().numpy()
     return sequences_to_cube(pred_all, idx, ndvi), history
 
 
@@ -177,6 +194,7 @@ def walk_forward_convlstm(
     spatial_train: xr.DataArray,
     spatial_test: xr.DataArray,
     static: xr.Dataset | None = None,
+    drivers: xr.Dataset | None = None,
     **fit_kwargs,
 ):
     """Retrain ConvLSTM per fold, score vs baselines, stitch OOS forecasts.
@@ -190,7 +208,7 @@ def walk_forward_convlstm(
     rows, histories = [], []
 
     for fi, fold in enumerate(folds):
-        pred, history = fit_predict_fold(ndvi, fold["train"], spatial_train, static, **fit_kwargs)
+        pred, history = fit_predict_fold(ndvi, fold["train"], spatial_train, static, drivers, **fit_kwargs)
         clim = climatology_forecast(ndvi, seasonal_climatology(ndvi.sel(time=fold["train"])))
         preds = {"convlstm": pred, "persistence": pers, "climatology": clim}
         rows.extend(score_cells(

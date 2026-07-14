@@ -45,6 +45,15 @@ def test_make_sequences_and_cube_roundtrip():
     assert bool((cube.isel(time=slice(3, None)) == 1).all())  # rest aligned to target months
 
 
+def test_channel_stack_appends_driver_channels():
+    ndvi = _cube()
+    coords = {"time": ndvi["time"], "y": ndvi["y"], "x": ndvi["x"]}
+    drivers = xr.Dataset({"rain": xr.DataArray(np.zeros((12, 6, 6), "float32"), dims=("time", "y", "x"), coords=coords)})
+    base = channel_stack(ndvi)
+    with_driver = channel_stack(ndvi, drivers=drivers)
+    assert with_driver.shape[1] == base.shape[1] + 1
+
+
 def test_model_forward_and_fit_predict():
     torch = pytest.importorskip("torch")
     from ecoforecast.evaluate import spatial_blocks, walk_forward_splits
