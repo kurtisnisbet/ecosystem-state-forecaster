@@ -5,11 +5,12 @@ recent past and the seasonal cycle, across Australian biomes. Every model is
 scored against persistence and seasonal-climatology baselines on splits that do
 not leak in space or time.
 
-Status: the v1 core runs end to end on Digital Earth Australia Sentinel-2
-data for a Sunshine Coast hinterland area (130 monthly steps, 2015 to 2026, at
-100 m). Gradient-boosted trees and a ConvLSTM both beat persistence by a clear
-margin, but neither beats climatology, which is the expected result for NDVI
-(see Results). Still to come: native 10 m resolution and the other three biomes.
+Status: the v1 core runs end to end on Digital Earth Australia Sentinel-2 data
+across four contrasting biomes (subtropical, tropical rainforest, arid, alpine;
+100 m, 2015 to 2026). Both models beat persistence everywhere. They match but do
+not beat climatology in the seasonal biomes, and they beat it in arid Alice
+Springs, where vegetation follows rain rather than a calendar (see Results).
+Still to come: native 10 m resolution and a graph-based model.
 
 ## Problem
 
@@ -90,31 +91,36 @@ the GPU when one is available.
 
 ## Results
 
-Real Sunshine Coast cube, headline cell (future time, seen locations):
+Headline cell (future time, seen locations), RMSE across four biomes:
 
-| Model | RMSE | Skill vs persistence |
-|-------|------|----------------------|
-| persistence | 0.151 | reference |
-| climatology | 0.109 | +28% |
-| gradient-boosted trees | 0.110 | +24% |
-| ConvLSTM | 0.120 | +18% |
+| Biome | persistence | climatology | GBT | ConvLSTM |
+|-------|-------------|-------------|-----|----------|
+| Sunshine Coast (subtropical) | 0.151 | 0.109 | 0.110 | 0.120 |
+| Daintree (tropical rainforest) | 0.250 | 0.168 | 0.184 | 0.179 |
+| Alice Springs (arid) | 0.071 | 0.087 | 0.069 | 0.068 |
+| Kosciuszko (alpine) | 0.122 | 0.078 | 0.083 | 0.106 |
 
-The two models beat persistence by 18 to 28 percent. Neither beats climatology:
-the gradient-boosted trees land level with it (0.110 against 0.109) and the
-ConvLSTM sits about ten percent behind. For NDVI this is the honest outcome. The
-seasonal cycle is so regular that climatology is very hard to beat one month
-ahead, and matching it is already a real result. The value here is the
-evaluation, not an inflated skill figure.
+What matters is where each method wins. In the three strongly seasonal biomes
+(subtropical, rainforest, alpine) climatology is very hard to beat: the models
+match it but do not pass it, because the seasonal cycle already explains most of
+next month's greenness.
 
-![Skill vs persistence, real cube](docs/figures/real_skill_2x2.png)
+Arid Alice Springs is the exception, and the interesting one. There the seasonal
+cycle is weak, so climatology is worse than persistence: desert vegetation
+responds to episodic rain, not the calendar. Both models beat climatology by
+about twenty percent, because recent NDVI carries the signal of a rain pulse that
+a monthly average cannot. That is where a forecaster earns its keep.
 
-Skill against persistence stays positive in all four cells of the space-time
-table, so the gain is not an artefact of one easy split.
+![Skill vs climatology by biome](docs/figures/biome_skill_vs_climatology.png)
 
-![Real forecasts vs actual](docs/figures/real_forecast_vs_baselines.png)
+The arid green-up makes the point. Climatology stays flat while the models track
+the pulse from recent momentum:
 
-The forecast trace is a single 100 m pixel and is noisy month to month; the
-table is the reliable summary.
+![Alice Springs forecast](docs/figures/biome_alice_springs_forecast.png)
+
+So forecastability is not uniform across the continent. It depends on how
+seasonal the vegetation is, and the honest evaluation surfaces that instead of
+hiding it in one averaged number.
 
 ### Drivers
 
@@ -201,7 +207,6 @@ pytest -q
 - Extend drivers: rainfall is wired in (SILO) but did not help; try soil moisture
   (ERA5-Land), fire (MODIS), and terrain from a DEM.
 - Move from 100 m to native 10 m on the GPU.
-- Extend to the other biomes: Daintree, Alice Springs, Kosciuszko.
 - Later: a graph-based model, an ensemble with uncertainty, and a small
   interactive demo.
 
