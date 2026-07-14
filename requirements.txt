@@ -17,6 +17,10 @@ shapely==2.1.2
 pystac-client==0.9.0
 odc-stac==0.5.2
 
+# ── Config / cube I/O ─────────────────────────────────────
+pyyaml==6.0.2
+netcdf4==1.7.2
+
 # ── Exploration & viz ─────────────────────────────────────
 matplotlib==3.11.0
 jupyterlab==4.6.0
