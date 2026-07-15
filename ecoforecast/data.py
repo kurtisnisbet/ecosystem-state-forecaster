@@ -85,12 +85,14 @@ def search_scenes(
 
 def compute_ndvi(
     ds: xr.Dataset,
+    nir_band: str = "nbart_nir_1",
     mask_band: str = "oa_fmask",
     clear_value: int = 1,
 ) -> xr.DataArray:
     """Cloud-mask a cube and compute NDVI.
 
     Keeps only clear-land pixels (fmask == clear_value); all others -> NaN.
+    `nir_band` is nbart_nir_1 for Sentinel-2, nbart_nir for Landsat.
 
     Returns
     -------
@@ -98,7 +100,7 @@ def compute_ndvi(
     """
     clear = ds[mask_band] == clear_value
     red = ds["nbart_red"].where(clear)
-    nir = ds["nbart_nir_1"].where(clear)
+    nir = ds[nir_band].where(clear)
     ndvi = (nir - red) / (nir + red)
     ndvi.name = "ndvi"
     return ndvi

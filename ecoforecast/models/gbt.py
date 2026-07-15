@@ -49,6 +49,7 @@ def fit_predict_fold(
     static: xr.Dataset | None = None,
     drivers: xr.Dataset | None = None,
     params: dict | None = None,
+    max_train_rows: int | None = None,
 ) -> tuple[xr.DataArray, LGBMRegressor]:
     """Train on (train-time x train-space) rows, predict the full (time, y, x) cube.
 
@@ -67,8 +68,11 @@ def fit_predict_fold(
         & table["in_space_train"].astype(bool)
         & table[cols + ["target"]].notna().all(axis=1)
     )
+    train_rows = table.index[is_train]
+    if max_train_rows and len(train_rows) > max_train_rows:
+        train_rows = np.random.default_rng(0).choice(train_rows, max_train_rows, replace=False)
     model = make_gbt(**(params or {}))
-    model.fit(table.loc[is_train, cols], table.loc[is_train, "target"])
+    model.fit(table.loc[train_rows, cols], table.loc[train_rows, "target"])
 
     has_features = table[cols].notna().all(axis=1)
     table["pred"] = np.nan
@@ -87,6 +91,7 @@ def walk_forward_gbt(
     static: xr.Dataset | None = None,
     drivers: xr.Dataset | None = None,
     params: dict | None = None,
+    max_train_rows: int | None = None,
 ) -> tuple[pd.DataFrame, xr.DataArray, pd.Series]:
     """Retrain GBT per fold, score it against the baselines, stitch OOS forecasts.
 
@@ -99,7 +104,7 @@ def walk_forward_gbt(
     rows, importances = [], []
 
     for fi, fold in enumerate(folds):
-        gbt_pred, model = fit_predict_fold(ndvi, fold["train"], spatial_train, static, drivers, params)
+        gbt_pred, model = fit_predict_fold(ndvi, fold["train"], spatial_train, static, drivers, params, max_train_rows)
         clim = climatology_forecast(ndvi, seasonal_climatology(ndvi.sel(time=fold["train"])))
         preds = {"gbt": gbt_pred, "persistence": pers, "climatology": clim}
 

@@ -7,18 +7,22 @@ project:
   horizon: 1            # steps ahead
   cadence: monthly
 
-imagery:
-  source: dea                 # Digital Earth Australia
-  products: [ga_s2am_ard_3, ga_s2bm_ard_3]   # Sentinel-2A/2B, Collection 3
-  resolution_m: 10
-  bands: [nbart_red, nbart_nir_1]            # for NDVI; extend as needed
-  cloud_mask: [oa_fmask, s2cloudless]
+imagery:                        # DEA analysis-ready surface reflectance profiles
+  sentinel2:                    # v1: 10 m native, ~2015-present
+    products: [ga_s2am_ard_3, ga_s2bm_ard_3]
+    nir_band: nbart_nir_1
+    time_range: "2015-10-01/2026-06-30"
+  landsat:                      # v2: 30 m native, ~1988-present (longer record, coarser)
+    products: [ga_ls5t_ard_3, ga_ls7e_ard_3, ga_ls8c_ard_3, ga_ls9c_ard_3]
+    nir_band: nbart_nir
+    time_range: "1988-01-01/2026-06-30"
 
 build:                          # settings for scripts/build_cube.py
+  profile: sentinel2            # sentinel2 (v1) | landsat (v2, longer record)
+  resolution_m: 100             # 10 (S2) / 30 (Landsat) native; 100 = scaled-back local
   biomes: [sunshine_coast_hinterland, daintree, alice_springs, kosciuszko]
-  time_range: "2015-10-01/2026-06-30"
-  resolution_m: 100             # scaled-back local run; 10 = native (Azure/GPU target)
-  cache_dir: data               # cubes cached at {cache_dir}/cube_{biome}.nc (gitignored)
+  cache_dir: data               # cubes at {cache_dir}/cube_{profile}_{resolution_m}m_{biome}.nc
+  max_train_rows: null          # cap GBT training rows; set ~3000000 at 10 m to stay tractable
 
 drivers_build:                  # settings for scripts/build_drivers.py
   use: false                     # ablation: lagged rainfall did not help one-step NDVI; off by default

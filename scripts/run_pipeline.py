@@ -31,7 +31,7 @@ from ecoforecast.models.gbt import walk_forward_gbt
 
 ROOT = Path(__file__).resolve().parents[1]
 FIG_DIR = ROOT / "docs" / "figures"
-MODEL_COLORS = {"gbt": "#1b7837", "convlstm": "#e7298a", "gnn": "#3182bd"}
+MODEL_COLORS = {"gbt": "#1b7837", "convlstm": "#e7298a", "gnn": "#3182bd", "ensemble": "#222222"}
 
 
 def _load_drivers(cfg, biome):
@@ -52,7 +52,7 @@ def evaluate_biome(cfg, biome, cube_path):
     strain, stest, _ = spatial_blocks(ndvi, ssp["block_size_px"], ssp["n_test_blocks"], ssp["buffer_px"], seed=1)
     drivers = _load_drivers(cfg, biome)
 
-    res_gbt, oos_gbt, _ = walk_forward_gbt(ndvi, folds, strain, stest, drivers=drivers)
+    res_gbt, oos_gbt, _ = walk_forward_gbt(ndvi, folds, strain, stest, drivers=drivers, max_train_rows=cfg["build"].get("max_train_rows"))
     frames, oos = [res_gbt], {"gbt": oos_gbt}
     try:
         import torch
@@ -74,6 +74,13 @@ def evaluate_biome(cfg, biome, cube_path):
     except Exception as exc:
         print(f"  GNN skipped ({type(exc).__name__}) — install torch to include it.")
 
+    if len(oos) >= 2:
+        from ecoforecast.ensemble import score_ensemble, stack_ensemble
+        ens, _weights = stack_ensemble(ndvi, oos, folds, space_mask=strain)
+        res_ens = score_ensemble(ndvi, ens, folds, strain, stest)
+        frames.append(res_ens[res_ens["predictor"] == "ensemble"])
+        oos["ensemble"] = ens
+
     res = pd.concat(frames, ignore_index=True)
     res["biome"] = biome
     return res, ndvi, folds, oos
@@ -84,10 +91,11 @@ def main():
     cfg = yaml.safe_load((ROOT / "ecoforecast" / "config.yaml").read_text())
     build = cfg["build"]
     cache_dir = ROOT / build["cache_dir"]
+    tag = f"{build['profile']}_{build['resolution_m']}m"
 
     all_res = []
     for biome in build["biomes"]:
-        cube_path = cache_dir / f"cube_{biome}.nc"
+        cube_path = cache_dir / f"cube_{tag}_{biome}.nc"
         if not cube_path.exists():
             print(f"[{biome}] no cube ({cube_path.name}), skip — run build_cube.py")
             continue
@@ -145,7 +153,7 @@ def _plot_forecast(ndvi, folds, oos, biome):
 
 def _plot_biome_comparison(res, biomes):
     head = res[(res.time == "future") & (res.space == "seen")]
-    models = [m for m in ("gbt", "convlstm", "gnn") if m in set(head["predictor"])]
+    models = [m for m in ("gbt", "convlstm", "gnn", "ensemble") if m in set(head["predictor"])]
     table = (head[head["predictor"].isin(models)]
              .pivot_table(index="biome", columns="predictor", values="skill_vs_climatology", aggfunc="mean")
              .reindex(biomes)[models])
