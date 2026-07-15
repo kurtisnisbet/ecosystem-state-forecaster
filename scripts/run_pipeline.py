@@ -31,6 +31,7 @@ from ecoforecast.models.gbt import walk_forward_gbt
 
 ROOT = Path(__file__).resolve().parents[1]
 FIG_DIR = ROOT / "docs" / "figures"
+MODEL_COLORS = {"gbt": "#1b7837", "convlstm": "#e7298a", "gnn": "#3182bd"}
 
 
 def _load_drivers(cfg, biome):
@@ -63,6 +64,15 @@ def evaluate_biome(cfg, biome, cube_path):
         oos["convlstm"] = oos_cl
     except Exception as exc:
         print(f"  ConvLSTM skipped ({type(exc).__name__}) — install torch to include it.")
+
+    try:
+        from ecoforecast.models.gnn import walk_forward_gnn
+        print("  GNN...")
+        res_gnn, oos_gnn, _ = walk_forward_gnn(ndvi, folds, strain, stest, drivers=drivers, hidden=32, rounds=3, epochs=30)
+        frames.append(res_gnn[res_gnn["predictor"] == "gnn"])
+        oos["gnn"] = oos_gnn
+    except Exception as exc:
+        print(f"  GNN skipped ({type(exc).__name__}) — install torch to include it.")
 
     res = pd.concat(frames, ignore_index=True)
     res["biome"] = biome
@@ -126,8 +136,8 @@ def _plot_forecast(ndvi, folds, oos, biome):
     ax.plot(t, ndvi.sel(time=test_all).isel(y=py, x=px), "k-o", lw=2, ms=3, label="actual")
     ax.plot(t, persistence(ndvi).sel(time=test_all).isel(y=py, x=px), color="#d95f02", label="persistence")
     ax.plot(t, clim.sel(time=test_all).isel(y=py, x=px), color="#7570b3", label="climatology")
-    for model, colour in zip(oos, ("#1b7837", "#e7298a")):
-        ax.plot(t, oos[model].sel(time=test_all).isel(y=py, x=px), color=colour, lw=2, label=model)
+    for model in oos:
+        ax.plot(t, oos[model].sel(time=test_all).isel(y=py, x=px), color=MODEL_COLORS.get(model, "#888888"), lw=2, label=model)
     ax.set_title(f"{biome}: forecasts vs actual (pixel {py},{px})")
     ax.set_ylabel("NDVI"); ax.legend(fontsize=7)
     fig.tight_layout(); fig.savefig(FIG_DIR / f"biome_{biome}_forecast.png", dpi=120); plt.close(fig)
@@ -135,12 +145,12 @@ def _plot_forecast(ndvi, folds, oos, biome):
 
 def _plot_biome_comparison(res, biomes):
     head = res[(res.time == "future") & (res.space == "seen")]
-    models = [m for m in ("gbt", "convlstm") if m in set(head["predictor"])]
+    models = [m for m in ("gbt", "convlstm", "gnn") if m in set(head["predictor"])]
     table = (head[head["predictor"].isin(models)]
              .pivot_table(index="biome", columns="predictor", values="skill_vs_climatology", aggfunc="mean")
-             .reindex(biomes))
+             .reindex(biomes)[models])
     fig, ax = plt.subplots(figsize=(9, 4))
-    table.plot.bar(ax=ax, color={"gbt": "#1b7837", "convlstm": "#e7298a"})
+    table.plot.bar(ax=ax, color=[MODEL_COLORS[m] for m in table.columns])
     ax.axhline(0, color="#333", lw=1)
     ax.set_ylabel("skill vs climatology")
     ax.set_xlabel("")

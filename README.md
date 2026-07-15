@@ -1,5 +1,7 @@
 # Ecosystem State Forecaster
 
+![tests](https://github.com/kurtisnisbet/ecosystem-state-forecaster/actions/workflows/ci.yml/badge.svg)
+
 Forecasting next month's vegetation greenness (NDVI), one step ahead, from its
 recent past and the seasonal cycle, across Australian biomes. Every model is
 scored against persistence and seasonal-climatology baselines on splits that do
@@ -7,10 +9,11 @@ not leak in space or time.
 
 Status: the v1 core runs end to end on Digital Earth Australia Sentinel-2 data
 across four contrasting biomes (subtropical, tropical rainforest, arid, alpine;
-100 m, 2015 to 2026). Both models beat persistence everywhere. They match but do
-not beat climatology in the seasonal biomes, and they beat it in arid Alice
-Springs, where vegetation follows rain rather than a calendar (see Results).
-Still to come: native 10 m resolution and a graph-based model.
+100 m, 2015 to 2026). Three models (gradient-boosted trees, a ConvLSTM, and a
+GraphCast-style GNN) all beat persistence everywhere. They match but do not beat
+climatology in the seasonal biomes, and they beat it in arid Alice Springs, where
+vegetation follows rain rather than a calendar and the graph model does best (see
+Results). Still to come: native 10 m resolution and the longer Landsat record.
 
 ## Problem
 
@@ -31,8 +34,9 @@ The pipeline has four parts. It builds a monthly NDVI cube from cloud-masked
 Sentinel-2. It derives features: short lags (t-1, t-2, t-3) for momentum, plus a
 month-of-year encoding and a training-only climatology for seasonality. It fits
 models of increasing complexity: the two baselines, gradient-boosted trees on a
-per-pixel feature table, and a ConvLSTM that predicts the next frame as a
-correction to the last one. It then evaluates with expanding-window walk-forward
+per-pixel feature table, a ConvLSTM that predicts the next frame as a correction
+to the last one, and a graph network that passes information between neighbouring
+pixels. It then evaluates with expanding-window walk-forward
 folds and spatial blocks, and reports skill against the baselines.
 
 ## Data
@@ -89,16 +93,22 @@ the GPU when one is available.
 
 ![ConvLSTM architecture](docs/figures/convlstm_architecture.png)
 
+The GNN follows a GraphCast-style encode-process-decode shape. Each pixel is a
+node joined to its four grid neighbours; an encoder embeds the same per-pixel
+features, several rounds of message passing let neighbours share information, and
+a residual decoder predicts next month. Like the ConvLSTM it starts at
+persistence and trains on the GPU.
+
 ## Results
 
 Headline cell (future time, seen locations), RMSE across four biomes:
 
-| Biome | persistence | climatology | GBT | ConvLSTM |
-|-------|-------------|-------------|-----|----------|
-| Sunshine Coast (subtropical) | 0.151 | 0.109 | 0.110 | 0.120 |
-| Daintree (tropical rainforest) | 0.250 | 0.168 | 0.184 | 0.179 |
-| Alice Springs (arid) | 0.071 | 0.087 | 0.069 | 0.068 |
-| Kosciuszko (alpine) | 0.122 | 0.078 | 0.083 | 0.106 |
+| Biome | persistence | climatology | GBT | ConvLSTM | GNN |
+|-------|-------------|-------------|-----|----------|-----|
+| Sunshine Coast (subtropical) | 0.151 | 0.109 | 0.110 | 0.120 | 0.110 |
+| Daintree (tropical rainforest) | 0.250 | 0.168 | 0.184 | 0.179 | 0.188 |
+| Alice Springs (arid) | 0.071 | 0.087 | 0.069 | 0.069 | 0.063 |
+| Kosciuszko (alpine) | 0.122 | 0.078 | 0.083 | 0.106 | 0.090 |
 
 What matters is where each method wins. In the three strongly seasonal biomes
 (subtropical, rainforest, alpine) climatology is very hard to beat: the models
@@ -107,9 +117,11 @@ next month's greenness.
 
 Arid Alice Springs is the exception, and the interesting one. There the seasonal
 cycle is weak, so climatology is worse than persistence: desert vegetation
-responds to episodic rain, not the calendar. Both models beat climatology by
-about twenty percent, because recent NDVI carries the signal of a rain pulse that
-a monthly average cannot. That is where a forecaster earns its keep.
+responds to episodic rain, not the calendar. All three models beat climatology,
+because recent NDVI carries the signal of a rain pulse that a monthly average
+cannot. The GNN wins by the widest margin (0.063 against climatology's 0.087),
+which fits: desert rain falls in spatially coherent bands, so letting neighbouring
+pixels share information through the graph pays off exactly where it should.
 
 ![Skill vs climatology by biome](docs/figures/biome_skill_vs_climatology.png)
 
@@ -135,18 +147,22 @@ for soil moisture and fire.
 
 ```
 ecoforecast/
-  config.yaml        # AOIs, dates, variables, split parameters
+  config.yaml        # biomes, dates, variables, split parameters
   data.py            # DEA STAC search + odc-stac load + NDVI + monthly composite
   features.py        # anomaly, lags, seasonal encoding, feature table
   baselines.py       # persistence + seasonal climatology
   evaluate.py        # walk-forward + spatial blocks + skill vs baselines
+  drivers.py         # SILO rainfall, aligned and lagged onto the grid
+  uncertainty.py     # conformal prediction intervals
   models/
     gbt.py           # LightGBM, walk-forward
     convlstm.py      # scaled-back ConvLSTM (PyTorch, GPU-aware)
+    gnn.py           # GraphCast-style message-passing GNN
 scripts/
-  build_cube.py      # build + cache the real NDVI cube from DEA
-  run_pipeline.py    # run all models on the cube, write real results
+  build_cube.py      # build + cache one NDVI cube per biome from DEA
+  run_pipeline.py    # evaluate every biome, write per-biome + cross-biome results
   demo_*.py          # synthetic-cube demos for each stage
+app/streamlit_app.py # interactive demo: pick a biome, see the forecast
 tests/               # pytest suite
 docs/figures/        # figures used in this README
 ```
@@ -187,7 +203,16 @@ python scripts/demo_baselines.py
 python scripts/demo_evaluate.py
 python scripts/demo_gbt.py
 python scripts/demo_convlstm.py
+python scripts/demo_gnn.py
+python scripts/demo_uncertainty.py
 pytest -q
+```
+
+Launch the interactive demo (pick a biome, see the forecast and its uncertainty
+band on a map):
+
+```bash
+streamlit run app/streamlit_app.py
 ```
 
 ## Evaluation notes
@@ -199,7 +224,7 @@ pytest -q
   input context even though the loss excludes them (a buffer separates them).
   Its unseen-location number is a softer test of spatial transfer than the
   per-pixel model's.
-- Results are at 100 m for one area. Treat them as a working baseline, not a
+- Results are at 100 m for four areas. Treat them as a working baseline, not a
   final answer.
 
 ## Roadmap
@@ -207,8 +232,8 @@ pytest -q
 - Extend drivers: rainfall is wired in (SILO) but did not help; try soil moisture
   (ERA5-Land), fire (MODIS), and terrain from a DEM.
 - Move from 100 m to native 10 m on the GPU.
-- Later: a graph-based model, an ensemble with uncertainty, and a small
-  interactive demo.
+- Later: an ensemble that stacks the models, and the longer Landsat record for
+  interannual robustness.
 
 ## Development
 
