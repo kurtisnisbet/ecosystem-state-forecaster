@@ -24,6 +24,9 @@ netcdf4==1.7.2
 # ── Drivers (SILO on the AWS open-data bucket) ────────────
 s3fs==2026.6.0
 
+# ── Demo app ──────────────────────────────────────────────
+streamlit==1.41.0
+
 # ── Exploration & viz ─────────────────────────────────────
 matplotlib==3.11.0
 jupyterlab==4.6.0
