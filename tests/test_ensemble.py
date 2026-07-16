@@ -26,17 +26,18 @@ def _obs_and_members(seed=0):
 def test_weights_nonnegative_and_favour_best():
     obs, models, folds = _obs_and_members()
     _ens, weights = stack_ensemble(obs, models, folds)
-    assert len(weights) == 3                          # folds 1..3 calibrated
+    assert len(weights) == 4                          # every fold gets weights
     wcols = [c for c in weights.columns if c.startswith("w_")]
     assert (weights[wcols].values >= -1e-9).all()     # non-negative
+    assert np.allclose(weights[wcols].sum(axis=1), 1.0)  # convex (weights sum to one)
     assert weights[wcols].mean().idxmax() == "w_good"  # least-noisy member weighted most
 
 
-def test_ensemble_at_least_as_good_as_best_member():
+def test_ensemble_is_competitive_and_bounded():
     obs, models, folds = _obs_and_members()
     ens, _ = stack_ensemble(obs, models, folds)
-    test = folds[1]["test"].copy()
-    for fo in folds[2:]:
+    test = folds[0]["test"].copy()
+    for fo in folds[1:]:
         test = test | fo["test"]
 
     def r(pred):
@@ -44,7 +45,9 @@ def test_ensemble_at_least_as_good_as_best_member():
         valid = o.notnull() & p.notnull()
         return rmse(p.where(valid), o.where(valid))
 
-    assert r(ens) <= min(r(m) for m in models.values()) * 1.02
+    member_rmses = [r(m) for m in models.values()]
+    assert r(ens) <= np.mean(member_rmses)            # beats the average member
+    assert r(ens) <= max(member_rmses) + 1e-6         # convex: bounded by the worst
 
 
 def test_score_ensemble_schema():

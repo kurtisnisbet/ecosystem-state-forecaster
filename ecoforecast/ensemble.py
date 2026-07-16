@@ -37,26 +37,33 @@ def _design(obs, model_oos, time_mask, space_mask):
 
 
 def stack_ensemble(obs, model_oos: dict[str, xr.DataArray], folds, space_mask=None):
-    """Rolling non-negative stack of the model out-of-sample cubes.
+    """Rolling convex stack of the model out-of-sample cubes.
 
-    Returns the ensemble OOS cube (defined on the calibrated test folds) and a
-    per-fold table of the fitted weights.
+    The first fold has nothing earlier to calibrate on, so it uses an equal-weight
+    average; later folds fit non-negative weights on the earlier folds and
+    normalise them to sum to one. The convex combination keeps the ensemble
+    bounded by its members, so it stays robust under a regime shift instead of
+    extrapolating past them. Returns the ensemble OOS cube (defined on every
+    fold) and a per-fold table of weights.
     """
     names = list(model_oos)
     ens = xr.full_like(obs, np.nan).rename("ensemble")
+    equal = sum(model_oos[n] for n in names) / len(names)
     rows = []
-    for k in range(1, len(folds)):
-        calib = folds[0]["test"].copy()
-        for j in range(1, k):
-            calib = calib | folds[j]["test"]
-        x, y, _ = _design(obs, model_oos, calib, space_mask)
-        if y.size < len(names) + 1:
-            continue
+    for k in range(len(folds)):
+        weights = np.full(len(names), 1.0 / len(names))
+        if k >= 1:
+            calib = folds[0]["test"].copy()
+            for j in range(1, k):
+                calib = calib | folds[j]["test"]
+            x, y, _ = _design(obs, model_oos, calib, space_mask)
+            if y.size >= len(names) + 1:
+                fit = LinearRegression(positive=True, fit_intercept=False).fit(x, y).coef_
+                if fit.sum() > 0:
+                    weights = fit / fit.sum()
 
-        weights = LinearRegression(positive=True, fit_intercept=False).fit(x, y).coef_
         blended = sum(weights[i] * model_oos[names[i]] for i in range(len(names)))
         ens = xr.where(folds[k]["test"], blended, ens)
-
         row = {"fold": k, "label": folds[k]["label"]}
         row.update({f"w_{name}": float(weights[i]) for i, name in enumerate(names)})
         rows.append(row)

@@ -103,12 +103,12 @@ persistence and trains on the GPU.
 
 Headline cell (future time, seen locations), RMSE across four biomes:
 
-| Biome | persistence | climatology | GBT | ConvLSTM | GNN |
-|-------|-------------|-------------|-----|----------|-----|
-| Sunshine Coast (subtropical) | 0.151 | 0.109 | 0.110 | 0.120 | 0.110 |
-| Daintree (tropical rainforest) | 0.250 | 0.168 | 0.184 | 0.179 | 0.188 |
-| Alice Springs (arid) | 0.071 | 0.087 | 0.069 | 0.069 | 0.063 |
-| Kosciuszko (alpine) | 0.122 | 0.078 | 0.083 | 0.106 | 0.090 |
+| Biome | persistence | climatology | GBT | ConvLSTM | GNN | ensemble |
+|-------|-------------|-------------|-----|----------|-----|----------|
+| Sunshine Coast (subtropical) | 0.151 | 0.109 | 0.110 | 0.120 | 0.110 | 0.111 |
+| Daintree (tropical rainforest) | 0.250 | 0.168 | 0.184 | 0.179 | 0.191 | 0.189 |
+| Alice Springs (arid) | 0.071 | 0.087 | 0.069 | 0.069 | 0.064 | 0.071 |
+| Kosciuszko (alpine) | 0.122 | 0.078 | 0.083 | 0.106 | 0.090 | 0.084 |
 
 What matters is where each method wins. In the three strongly seasonal biomes
 (subtropical, rainforest, alpine) climatology is very hard to beat: the models
@@ -119,7 +119,7 @@ Arid Alice Springs is the exception, and the interesting one. There the seasonal
 cycle is weak, so climatology is worse than persistence: desert vegetation
 responds to episodic rain, not the calendar. All three models beat climatology,
 because recent NDVI carries the signal of a rain pulse that a monthly average
-cannot. The GNN wins by the widest margin (0.063 against climatology's 0.087),
+cannot. The GNN wins by the widest margin (0.064 against climatology's 0.087),
 which fits: desert rain falls in spatially coherent bands, so letting neighbouring
 pixels share information through the graph pays off exactly where it should.
 
@@ -142,6 +142,15 @@ unchanged, so recent NDVI already carries most of the vegetation's response to
 recent weather at this monthly, 100 m, one-step-ahead setting. Rainfall stays in
 the code as an optional input, off by default, and the driver machinery is ready
 for soil moisture and fire.
+
+### Ensemble
+
+Stacking the three models with rolling-calibrated convex weights gives a robust
+blend: it is bounded by its members, never worse than the worst, and competitive
+in every biome. But it does not beat the best single model anywhere. Averaging
+dilutes the biome-specific winner, clearest in arid Alice Springs where the GNN
+alone is strongest. Like the rainfall drivers, a reasonable idea that did not add
+skill here, though it removes the need to pick a model per biome.
 
 ## Repository layout
 
@@ -231,9 +240,8 @@ streamlit run app/streamlit_app.py
 
 - Extend drivers: rainfall is wired in (SILO) but did not help; try soil moisture
   (ERA5-Land), fire (MODIS), and terrain from a DEM.
-- Move from 100 m to native 10 m on the GPU.
-- Later: an ensemble that stacks the models, and the longer Landsat record for
-  interannual robustness.
+- Run at native 10 m and over the longer Landsat record (both are config
+  profiles now); report whether either changes the biome story.
 
 ## Development
 
