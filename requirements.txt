@@ -7,7 +7,7 @@
 # For the full research pipeline (DEA access, LightGBM, PyTorch), use:
 #   pip install -r requirements-dev.txt
 
-streamlit==1.41.0
+streamlit>=1.41
 numpy==2.4.6
 pandas==3.0.3
 xarray==2026.4.0

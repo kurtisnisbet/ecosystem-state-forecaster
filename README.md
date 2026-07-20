@@ -2,6 +2,8 @@
 
 ![tests](https://github.com/kurtisnisbet/ecosystem-state-forecaster/actions/workflows/ci.yml/badge.svg)
 
+**[Try the interactive demo](https://ecosystem-state-forecaster.streamlit.app)**
+
 Forecasting next month's vegetation greenness (NDVI), one step ahead, from its
 recent past and the seasonal cycle, across Australian biomes. Every model is
 scored against persistence and seasonal-climatology baselines on splits that do
@@ -279,10 +281,10 @@ check that the interval's observed coverage matches the level you asked for.
 streamlit run app/streamlit_app.py
 ```
 
-To host it, point Streamlit Community Cloud at this repository with
-`app/streamlit_app.py` as the entry point. It installs from the slim
-`requirements.txt`, and `docs/app_data/` is committed, so no build step runs on
-the server.
+The hosted copy runs on Streamlit Community Cloud, pointed at this repository
+with `app/streamlit_app.py` as the entry point. It installs from the slim
+`requirements.txt`, and `docs/app_data/` is committed, so nothing is built on the
+server and a push to `main` redeploys it.
 
 ## Evaluation notes
 
