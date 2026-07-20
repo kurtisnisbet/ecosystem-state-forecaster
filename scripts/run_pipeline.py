@@ -24,6 +24,7 @@ import xarray as xr
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ecoforecast.app_data import save_app_data
 from ecoforecast.baselines import climatology_forecast, persistence
 from ecoforecast.features import seasonal_climatology
 from ecoforecast.evaluate import spatial_blocks, walk_forward_splits
@@ -83,7 +84,7 @@ def evaluate_biome(cfg, biome, cube_path):
 
     res = pd.concat(frames, ignore_index=True)
     res["biome"] = biome
-    return res, ndvi, folds, oos
+    return res, ndvi, folds, oos, strain
 
 
 def main():
@@ -100,11 +101,12 @@ def main():
             print(f"[{biome}] no cube ({cube_path.name}), skip — run build_cube.py")
             continue
         print(f"[{biome}]")
-        res, ndvi, folds, oos = evaluate_biome(cfg, biome, cube_path)
+        res, ndvi, folds, oos, strain = evaluate_biome(cfg, biome, cube_path)
         all_res.append(res)
         head = res[(res.time == "future") & (res.space == "seen")].groupby("predictor")["rmse"].mean().sort_values()
         print("  headline RMSE:", {k: round(v, 4) for k, v in head.items()})
         _plot_forecast(ndvi, folds, oos, biome)
+        save_app_data(ndvi, oos, folds, strain, biome, tag, ROOT / "docs" / "app_data", results=res)
 
     if not all_res:
         raise SystemExit("No cubes found — run scripts/build_cube.py first.")

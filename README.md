@@ -193,6 +193,8 @@ ecoforecast/
   evaluate.py        # walk-forward + spatial blocks + skill vs baselines
   drivers.py         # SILO rainfall, aligned and lagged onto the grid
   uncertainty.py     # conformal prediction intervals
+  ensemble.py        # rolling-calibrated convex stack of the models
+  app_data.py        # precompute the small artifacts the demo reads
   models/
     gbt.py           # LightGBM, walk-forward
     convlstm.py      # scaled-back ConvLSTM (PyTorch, GPU-aware)
@@ -201,9 +203,10 @@ scripts/
   build_cube.py      # build + cache one NDVI cube per biome from DEA
   run_pipeline.py    # evaluate every biome, write per-biome + cross-biome results
   demo_*.py          # synthetic-cube demos for each stage
-app/streamlit_app.py # interactive demo: pick a biome, see the forecast
+app/streamlit_app.py # interactive demo, reads only the precomputed artifacts
 tests/               # pytest suite
 docs/figures/        # figures used in this README
+docs/app_data/       # small NetCDF artifacts that power the demo
 ```
 
 ## How to run
@@ -222,9 +225,14 @@ CUDA stack:
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU
 # NVIDIA GPU (Blackwell needs cu128+): pip install torch --index-url https://download.pytorch.org/whl/cu128
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pip install -e .
 ```
+
+There are two dependency files. `requirements-dev.txt` is the full research
+stack above. `requirements.txt` is deliberately slim: it holds only what the
+hosted demo needs, because the demo reads precomputed files and imports no model
+or geospatial libraries.
 
 Build the real cube (needs internet; set the area and dates in
 `ecoforecast/config.yaml`), then run the models:
@@ -247,12 +255,34 @@ python scripts/demo_uncertainty.py
 pytest -q
 ```
 
-Launch the interactive demo (pick a biome, see the forecast and its uncertainty
-band on a map):
+## Interactive demo
+
+`scripts/run_pipeline.py` writes a small artifact per biome per record into
+`docs/app_data/`: a coarsened NDVI window, the month-of-year climatology, each
+model's out-of-sample forecasts, the training mask, the headline scores, and a
+table of conformal quantiles. The app reads those and nothing else, so it trains
+nothing on load, imports no model libraries, and fits in a free hosting tier.
+The whole set is about 15 MB.
+
+Storing the quantile table rather than one fixed interval is what keeps the
+confidence slider live: moving it looks up a different quantile instead of
+recomputing anything.
+
+The control worth trying first is the satellite record. Switching between the
+11-year Sentinel-2 and the 40-year Landsat record flips the headline result,
+from climatology winning nearly everywhere to the models winning in every biome.
+You can also pick a biome and a model, step through forecast months against the
+actual and error maps, follow one pixel through time against both baselines, and
+check that the interval's observed coverage matches the level you asked for.
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
+
+To host it, point Streamlit Community Cloud at this repository with
+`app/streamlit_app.py` as the entry point. It installs from the slim
+`requirements.txt`, and `docs/app_data/` is committed, so no build step runs on
+the server.
 
 ## Evaluation notes
 
@@ -275,7 +305,8 @@ streamlit run app/streamlit_app.py
 
 ## Development
 
-- Python 3.11; dependencies pinned in `requirements.txt`; the venv is not committed.
+- Python 3.11; dependencies pinned in `requirements.txt` (demo) and
+  `requirements-dev.txt` (full pipeline); the venv is not committed.
 - Short-lived feature branches off `main`; `main` stays working.
 - Small, focused commits with imperative messages; review the staged diff before
   committing; never commit data, model weights, secrets, or the venv.

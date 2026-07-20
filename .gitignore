@@ -24,6 +24,10 @@ data/
 *.h5
 *.hdf
 
+# ── Demo artifacts (small and precomputed, so deliberately committed) ──
+# The hosted app reads these; without them there is nothing to deploy.
+!docs/app_data/*.nc
+
 # ── Model weights / checkpoints / run artifacts ───────────
 *.pt
 *.pth

@@ -1,0 +1,44 @@
+# Full research stack: building cubes from Digital Earth Australia, fitting the
+# models, and running the tests. Pinned for reproducibility.
+#
+# The hosted demo does NOT install this file; it uses the slim requirements.txt.
+
+-r requirements.txt
+
+# ── Cube core ─────────────────────────────────────────────
+dask==2026.6.0
+
+# ── Geospatial I/O ────────────────────────────────────────
+rioxarray==0.19.0
+rasterio==1.4.4
+geopandas==1.1.4
+shapely==2.1.2
+
+# ── DEA / STAC access ─────────────────────────────────────
+pystac-client==0.9.0
+odc-stac==0.5.2
+
+# ── Config ────────────────────────────────────────────────
+pyyaml==6.0.2
+
+# ── Drivers (SILO on the AWS open-data bucket) ────────────
+s3fs==2026.6.0
+
+# ── Exploration & viz ─────────────────────────────────────
+jupyterlab==4.6.0
+ipykernel==7.3.0
+
+# ── Modelling ─────────────────────────────────────────────
+scikit-learn==1.7.2
+lightgbm==4.6.0
+
+# ── Testing ───────────────────────────────────────────────
+pytest==9.1.1
+
+# ── Deep learning (ConvLSTM, GNN) ─────────────────────────
+# Install the build for your hardware FIRST, so this line doesn't pull the
+# default CUDA stack over it:
+#   CPU:            pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   NVIDIA (CUDA):  pip install torch --index-url https://download.pytorch.org/whl/cu128
+#   see https://pytorch.org/get-started/locally
+torch>=2.11

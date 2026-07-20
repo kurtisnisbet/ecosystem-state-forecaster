@@ -1,48 +1,15 @@
-# Core dependencies for the Ecosystem State Forecaster (v1).
-# Pinned for reproducibility. torch will be added for the ConvLSTM stage.
+# Runtime dependencies for the hosted demo (app/streamlit_app.py).
+#
+# Deliberately slim. The app reads precomputed artifacts from docs/app_data and
+# imports no model or geospatial libraries, so the hosted container stays small
+# and starts fast. Streamlit Community Cloud installs from this file.
+#
+# For the full research pipeline (DEA access, LightGBM, PyTorch), use:
+#   pip install -r requirements-dev.txt
 
-# ── Cube core ─────────────────────────────────────────────
+streamlit==1.41.0
 numpy==2.4.6
 pandas==3.0.3
 xarray==2026.4.0
-dask==2026.6.0
-
-# ── Geospatial I/O ────────────────────────────────────────
-rioxarray==0.19.0
-rasterio==1.4.4
-geopandas==1.1.4
-shapely==2.1.2
-
-# ── DEA / STAC access ─────────────────────────────────────
-pystac-client==0.9.0
-odc-stac==0.5.2
-
-# ── Config / cube I/O ─────────────────────────────────────
-pyyaml==6.0.2
 netcdf4==1.7.2
-
-# ── Drivers (SILO on the AWS open-data bucket) ────────────
-s3fs==2026.6.0
-
-# ── Demo app ──────────────────────────────────────────────
-streamlit==1.41.0
-
-# ── Exploration & viz ─────────────────────────────────────
 matplotlib==3.11.0
-jupyterlab==4.6.0
-ipykernel==7.3.0
-
-# ── Modelling ─────────────────────────────────────────────
-scikit-learn==1.7.2
-lightgbm==4.6.0
-
-# ── Testing ───────────────────────────────────────────────
-pytest==9.1.1
-
-# ── Deep learning (ConvLSTM) ──────────────────────────────
-# Install the build for your hardware FIRST, so this line doesn't pull the
-# default CUDA stack over it:
-#   CPU:            pip install torch --index-url https://download.pytorch.org/whl/cpu
-#   NVIDIA (CUDA):  pip install torch --index-url https://download.pytorch.org/whl/cu128
-#   see https://pytorch.org/get-started/locally
-torch>=2.11
