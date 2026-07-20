@@ -8,6 +8,11 @@ derive NDVI.
 import pystac_client
 import xarray as xr
 from odc.stac import load, configure_rio
+from pystac_client.stac_api_io import StacApiIO
+from urllib3.util.retry import Retry
+
+# Retry transient DEA server errors (502/503/504) with exponential backoff.
+_RETRY = Retry(total=6, backoff_factor=1.0, status_forcelist=[429, 500, 502, 503, 504])
 
 NDVI_BANDS = ["nbart_red", "nbart_nir_1", "oa_fmask"]
 DEA_STAC_URL = "https://explorer.dea.ga.gov.au/stac"
@@ -69,18 +74,21 @@ def search_scenes(
     -------
     list of STAC items across the full range.
     """
-    catalog = pystac_client.Client.open(DEA_STAC_URL)
+    catalog = pystac_client.Client.open(DEA_STAC_URL, stac_io=StacApiIO(max_retries=_RETRY))
     start_year = int(time_range[:4])
     end_year = int(time_range.split("/")[1][:4])
 
     items = []
     for year in range(start_year, end_year + 1):
-        search = catalog.search(
-            collections=collections,
-            bbox=bbox,
-            datetime=f"{year}-01-01/{year}-12-31",
-        )
-        items.extend(search.items())
+        try:
+            search = catalog.search(
+                collections=collections,
+                bbox=bbox,
+                datetime=f"{year}-01-01/{year}-12-31",
+            )
+            items.extend(search.items())
+        except Exception as exc:
+            print(f"  warning: {year} search failed ({type(exc).__name__}); skipping that year")
     return items
 
 def compute_ndvi(

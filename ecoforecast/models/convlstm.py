@@ -147,12 +147,15 @@ def fit_predict_fold(
     lr: float = DEFAULTS["lr"],
     seed: int = DEFAULTS["seed"],
     device: str | None = None,
+    batch_size: int = 16,
 ):
     """Train on train-time x train-space x valid pixels; predict the whole cube.
 
     Uses the GPU automatically when one is available (pass `device` to force
-    "cuda" or "cpu"). Returns the prediction cube (NaN in the first `seq_len`
-    months) and the per-epoch training loss.
+    "cuda" or "cpu"). Trains in minibatches of sequences and keeps the full
+    arrays on the host, moving only one batch to the GPU at a time, so a long
+    record does not exhaust VRAM. Returns the prediction cube (NaN in the first
+    `seq_len` months) and the per-epoch mean training loss.
     """
     torch = _torch()
     dev = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
@@ -167,24 +170,33 @@ def fit_predict_fold(
     valid = (~np.isnan(y)).astype("float32")
     y_filled = np.nan_to_num(y, nan=0.0)
 
-    x_tr = torch.from_numpy(x[tr]).to(dev)
-    y_tr = torch.from_numpy(y_filled[tr]).to(dev)
-    w_tr = torch.from_numpy(valid[tr] * space[None]).to(dev)
-
+    space_t = torch.from_numpy(space).to(dev)
     model = make_convlstm(stack.shape[1], hidden).to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
+    rng = np.random.default_rng(seed)
+
     history = []
     for _ in range(epochs):
-        opt.zero_grad()
-        pred = model(x_tr)
-        loss = ((pred - y_tr) ** 2 * w_tr).sum() / w_tr.sum().clamp(min=1.0)
-        loss.backward()
-        opt.step()
-        history.append(loss.item())
+        losses = []
+        order = rng.permutation(tr)
+        for start in range(0, order.size, batch_size):
+            sel = order[start : start + batch_size]
+            xb = torch.from_numpy(x[sel]).to(dev)
+            yb = torch.from_numpy(y_filled[sel]).to(dev)
+            wb = torch.from_numpy(valid[sel]).to(dev) * space_t
+            opt.zero_grad()
+            loss = ((model(xb) - yb) ** 2 * wb).sum() / wb.sum().clamp(min=1.0)
+            loss.backward()
+            opt.step()
+            losses.append(loss.item())
+        history.append(float(np.mean(losses)) if losses else float("nan"))
 
     model.eval()
+    pred_all = np.empty_like(y_filled)
     with torch.no_grad():
-        pred_all = model(torch.from_numpy(x).to(dev)).cpu().numpy()
+        for start in range(0, x.shape[0], batch_size):
+            xb = torch.from_numpy(x[start : start + batch_size]).to(dev)
+            pred_all[start : start + batch_size] = model(xb).cpu().numpy()
     return sequences_to_cube(pred_all, idx, ndvi), history
 
 

@@ -7,13 +7,13 @@ recent past and the seasonal cycle, across Australian biomes. Every model is
 scored against persistence and seasonal-climatology baselines on splits that do
 not leak in space or time.
 
-Status: the v1 core runs end to end on Digital Earth Australia Sentinel-2 data
-across four contrasting biomes (subtropical, tropical rainforest, arid, alpine;
-100 m, 2015 to 2026). Three models (gradient-boosted trees, a ConvLSTM, and a
-GraphCast-style GNN) all beat persistence everywhere. They match but do not beat
-climatology in the seasonal biomes, and they beat it in arid Alice Springs, where
-vegetation follows rain rather than a calendar and the graph model does best (see
-Results). Still to come: native 10 m resolution and the longer Landsat record.
+Status: the core runs end to end on Digital Earth Australia data across four
+contrasting biomes (subtropical, tropical rainforest, arid, alpine) at 100 m,
+with three models (gradient-boosted trees, a ConvLSTM, and a GraphCast-style GNN)
+plus a stacked ensemble. On the 11-year Sentinel-2 record the models beat
+persistence everywhere but only beat climatology in arid Alice Springs. On the
+40-year Landsat record they beat climatology in every biome (see Results). Still
+to come: native 10 m resolution.
 
 ## Problem
 
@@ -150,7 +150,37 @@ blend: it is bounded by its members, never worse than the worst, and competitive
 in every biome. But it does not beat the best single model anywhere. Averaging
 dilutes the biome-specific winner, clearest in arid Alice Springs where the GNN
 alone is strongest. Like the rainfall drivers, a reasonable idea that did not add
-skill here, though it removes the need to pick a model per biome.
+skill on this record, though it removes the need to pick a model per biome. On
+the longer Landsat record below it does noticeably better.
+
+### The longer record
+
+Rebuilding on Landsat (1988 to 2026, 463 months, same 100 m grid) changes the
+conclusion. Headline RMSE:
+
+| Biome | persistence | climatology | GBT | ConvLSTM | GNN | ensemble |
+|-------|-------------|-------------|-----|----------|-----|----------|
+| Sunshine Coast (subtropical) | 0.085 | 0.088 | 0.067 | 0.075 | 0.080 | 0.067 |
+| Daintree (tropical rainforest) | 0.099 | 0.102 | 0.081 | 0.106 | 0.097 | 0.083 |
+| Alice Springs (arid) | 0.068 | 0.096 | 0.064 | 0.060 | 0.068 | 0.060 |
+| Kosciuszko (alpine) | 0.131 | 0.097 | 0.095 | 0.124 | 0.103 | 0.094 |
+
+With four decades instead of one, the gradient-boosted trees and the ensemble
+beat climatology in every biome, not just the arid one. Two things drive that.
+The models get about 3.5 times more training data. And climatology itself
+weakens: over forty years a typical month has to absorb far more interannual
+variability, and in the Sunshine Coast and Daintree it is now worse even than
+persistence. The short record flattered climatology.
+
+The ensemble earns its keep here too, finishing first or equal first in three of
+the four biomes, because the extra folds give the stacking weights more to
+calibrate on.
+
+Absolute errors are not comparable between the two records, since Sentinel-2 and
+Landsat are different instruments with different compositing. The honest
+comparison is each model against its own baselines within each record.
+
+![Skill vs climatology by biome, Landsat](docs/figures/biome_skill_vs_climatology_landsat.png)
 
 ## Repository layout
 
@@ -240,8 +270,8 @@ streamlit run app/streamlit_app.py
 
 - Extend drivers: rainfall is wired in (SILO) but did not help; try soil moisture
   (ERA5-Land), fire (MODIS), and terrain from a DEM.
-- Run at native 10 m and over the longer Landsat record (both are config
-  profiles now); report whether either changes the biome story.
+- Run at native 10 m on one AOI (a config profile) to see whether field-scale
+  detail changes the picture.
 
 ## Development
 
