@@ -61,7 +61,7 @@ def search_scenes(
     """Search DEA's STAC catalogue for Sentinel-2 scenes.
 
     DEA's STAC caps the items returned by a single search, silently truncating
-    long date ranges. To get the full record, we split the request into
+    long date ranges. To get the full record, I split the request into
     one-year windows and concatenate the results.
 
     Parameters
