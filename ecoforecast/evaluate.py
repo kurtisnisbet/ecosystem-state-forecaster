@@ -84,6 +84,38 @@ def _dilate(mask: np.ndarray, r: int) -> np.ndarray:
     return out
 
 
+def pixel_size(da: xr.DataArray) -> float:
+    """Ground size of one pixel, in the units of the cube's x coordinate (metres
+    for the projected DEA grids). Raises if the grid has fewer than two columns."""
+    x = da["x"].values
+    if x.size < 2:
+        raise ValueError("need at least two columns to infer the pixel size")
+    return abs(float(x[1] - x[0]))
+
+
+def blocks_in_pixels(
+    da: xr.DataArray,
+    block_size_m: float | None = None,
+    buffer_m: float | None = None,
+    block_size_px: int | None = None,
+    buffer_px: int | None = None,
+) -> tuple[int, int]:
+    """Resolve (block_size, buffer) in pixels, preferring the metre-based settings.
+
+    Block sizes must be expressed in ground distance, not pixels, or the same
+    config produces a 2 km block at 100 m and a 200 m block at 10 m. The smaller
+    block would sit inside the spatial autocorrelation range, leak across the
+    split, and make the finer resolution look better than it is. Pixel settings
+    remain as a fallback for cubes without projected coordinates.
+    """
+    res = pixel_size(da)
+    block = max(1, round(block_size_m / res)) if block_size_m else block_size_px
+    buff = max(1, round(buffer_m / res)) if buffer_m else buffer_px
+    if block is None or buff is None:
+        raise ValueError("set block_size_m/buffer_m or block_size_px/buffer_px")
+    return int(block), int(buff)
+
+
 def spatial_blocks(
     da: xr.DataArray,
     block_size: int,

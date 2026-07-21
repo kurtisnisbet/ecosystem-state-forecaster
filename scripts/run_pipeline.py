@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ecoforecast.app_data import save_app_data
 from ecoforecast.baselines import climatology_forecast, persistence
 from ecoforecast.features import seasonal_climatology
-from ecoforecast.evaluate import spatial_blocks, walk_forward_splits
+from ecoforecast.evaluate import blocks_in_pixels, pixel_size, spatial_blocks, walk_forward_splits
 from ecoforecast.models.gbt import walk_forward_gbt
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,7 +52,11 @@ def evaluate_biome(cfg, biome, cube_path):
     ndvi = xr.open_dataarray(cube_path)
     tsp, ssp = cfg["splits"]["temporal"], cfg["splits"]["spatial"]
     folds = walk_forward_splits(ndvi["time"], tsp["block_months"], tsp["n_test_folds"], tsp["embargo_months"])
-    strain, stest, _ = spatial_blocks(ndvi, ssp["block_size_px"], ssp["n_test_blocks"], ssp["buffer_px"], seed=1)
+    block_px, buffer_px = blocks_in_pixels(
+        ndvi, ssp.get("block_size_m"), ssp.get("buffer_m"), ssp.get("block_size_px"), ssp.get("buffer_px"))
+    res = pixel_size(ndvi)
+    print(f"  {res:.0f} m pixels; spatial blocks {block_px} px ({block_px * res:.0f} m), buffer {buffer_px} px")
+    strain, stest, _ = spatial_blocks(ndvi, block_px, ssp["n_test_blocks"], buffer_px, seed=1)
     drivers = _load_drivers(cfg, biome)
 
     res_gbt, oos_gbt, _ = walk_forward_gbt(ndvi, folds, strain, stest, drivers=drivers, max_train_rows=cfg["build"].get("max_train_rows"))
@@ -95,6 +99,12 @@ def main():
     build = cfg["build"]
     cache_dir = ROOT / build["cache_dir"]
     tag = f"{build['profile']}_{build['resolution_m']}m"
+    # An optional run_name separates side experiments (a different biome set at the
+    # same profile and resolution) from the published run, which would otherwise
+    # share a results filename. Cubes stay on `tag` because the biome name already
+    # makes them unique, so a side run reuses whatever is cached.
+    run_name = build.get("run_name")
+    label = f"{tag}_{run_name}" if run_name else tag
 
     all_res = []
     for biome in build["biomes"]:
@@ -107,17 +117,18 @@ def main():
         all_res.append(res)
         head = res[(res.time == "future") & (res.space == "seen")].groupby("predictor")["rmse"].mean().sort_values()
         print("  headline RMSE:", {k: round(v, 4) for k, v in head.items()})
-        _plot_forecast(ndvi, folds, oos, biome, tag)
-        save_app_data(ndvi, oos, folds, strain, biome, tag, ROOT / "docs" / "app_data", results=res)
+        _plot_forecast(ndvi, folds, oos, biome, label)
+        if not run_name:   # side experiments do not feed the published demo
+            save_app_data(ndvi, oos, folds, strain, biome, tag, ROOT / "docs" / "app_data", results=res)
 
     if not all_res:
         raise SystemExit("No cubes found — run scripts/build_cube.py first.")
 
     combined = pd.concat(all_res, ignore_index=True)
-    results_csv = ROOT / "docs" / f"biome_results_{tag}.csv"
+    results_csv = ROOT / "docs" / f"biome_results_{label}.csv"
     combined.to_csv(results_csv, index=False)
     _print_summary(combined, build["biomes"])
-    _plot_biome_comparison(combined, build["biomes"], tag)
+    _plot_biome_comparison(combined, build["biomes"], label)
     print(f"\nfigures -> {FIG_DIR}   results -> docs/{results_csv.name}")
 
 

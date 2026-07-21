@@ -18,11 +18,13 @@ imagery:                        # DEA analysis-ready surface reflectance profile
     time_range: "1988-01-01/2026-06-30"
 
 build:                          # settings for scripts/build_cube.py
-  profile: sentinel2            # sentinel2 (v1) | landsat (v2, longer record)
+  profile: landsat              # sentinel2 (v1) | landsat (v2, longer record)
   resolution_m: 100             # 10 (S2) / 30 (Landsat) native; 100 = scaled-back local
   biomes: [sunshine_coast_hinterland, daintree, alice_springs, kosciuszko]
   cache_dir: data               # cubes at {cache_dir}/cube_{profile}_{resolution_m}m_{biome}.nc
   max_train_rows: null          # cap GBT training rows; set ~3000000 at 10 m to stay tractable
+  run_name: null                # set for side experiments so their results get
+                                # their own filenames and skip the demo artifacts
 
 drivers_build:                  # settings for scripts/build_drivers.py
   use: false                     # ablation: lagged rainfall did not help one-step NDVI; off by default
@@ -42,6 +44,9 @@ biomes:
   kosciuszko:                  # alpine (Snowy Mountains)
     bbox: [148.22, -36.50, 148.34, -36.38]
     crs: EPSG:4326
+  sunshine_coast_core:         # 4 x 4 km, nested inside sunshine_coast_hinterland.
+    bbox: [152.830, -26.758, 152.870, -26.722]   # for the 10 m vs 100 m comparison
+    crs: EPSG:4326
 
 drivers:
   rainfall: silo
@@ -57,9 +62,13 @@ splits:
     embargo_months: 3     # ~ feature lookback
   spatial:
     n_test_blocks: 3
-    block_size_m: null    # TODO: derive from variogram range
-    buffer_m: null        # TODO: derive from variogram range
-    block_size_px: 20     # provisional pixel block until the variogram is computed
+    # Ground distances, so the same split holds at any resolution. At 100 m these
+    # resolve to the 20 px blocks and 2 px buffer used for every published result.
+    # For the 4 km resolution experiment use 500 / 100 instead, since a 4 km box
+    # cannot hold enough 2 km blocks (see README, Resolution).
+    block_size_m: 2000
+    buffer_m: 200
+    block_size_px: 20     # fallback when a cube has no projected coordinates
     buffer_px: 2
 
 paths:

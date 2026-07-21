@@ -6,7 +6,9 @@ import pytest
 import xarray as xr
 
 from ecoforecast.evaluate import (
+    blocks_in_pixels,
     evaluate_folds,
+    pixel_size,
     r2,
     rmse,
     skill_score,
@@ -14,6 +16,49 @@ from ecoforecast.evaluate import (
     summarise_2x2,
     walk_forward_splits,
 )
+
+
+def _grid(res_m, n=40):
+    """A cube on a projected grid with `res_m` pixels, y descending as DEA's are."""
+    time = pd.date_range("2019-01-01", periods=6, freq="MS")
+    data = np.zeros((6, n, n), dtype="float32")
+    return xr.DataArray(data, dims=("time", "y", "x"), coords={
+        "time": time,
+        "y": -3_000_000 - np.arange(n) * res_m,
+        "x": 1_900_000 + np.arange(n) * res_m,
+    })
+
+
+def test_pixel_size_reads_the_grid_spacing():
+    assert pixel_size(_grid(100)) == 100
+    assert pixel_size(_grid(10)) == 10
+    with pytest.raises(ValueError):
+        pixel_size(_grid(100).isel(x=slice(0, 1)))
+
+
+def test_metre_blocks_are_the_same_ground_area_at_any_resolution():
+    """The point of the change: 2 km stays 2 km when the pixels get smaller."""
+    at100 = blocks_in_pixels(_grid(100), block_size_m=2000, buffer_m=200)
+    at10 = blocks_in_pixels(_grid(10), block_size_m=2000, buffer_m=200)
+    assert at100 == (20, 2)
+    assert at10 == (200, 20)
+    assert at100[0] * 100 == at10[0] * 10        # identical ground distance
+
+
+def test_metre_settings_reproduce_the_published_pixel_settings():
+    """2000 m / 200 m at 100 m must equal the 20 px / 2 px used for every result."""
+    assert blocks_in_pixels(_grid(100), block_size_m=2000, buffer_m=200) == (20, 2)
+
+
+def test_pixel_settings_are_used_when_no_metres_given():
+    assert blocks_in_pixels(_grid(100), None, None, block_size_px=8, buffer_px=3) == (8, 3)
+    with pytest.raises(ValueError):
+        blocks_in_pixels(_grid(100))
+
+
+def test_blocks_never_round_down_to_zero():
+    block, buff = blocks_in_pixels(_grid(500), block_size_m=600, buffer_m=100)
+    assert block >= 1 and buff >= 1
 
 
 @pytest.fixture

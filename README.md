@@ -184,6 +184,30 @@ comparison is each model against its own baselines within each record.
 
 ![Skill vs climatology by biome, Landsat](docs/figures/biome_skill_vs_climatology_landsat_100m.png)
 
+### Resolution
+
+Native 10 m does not fit the main areas. The Sunshine Coast box is 150 by 120
+pixels at 100 m. At 10 m it is 1500 by 1200, which is 234 million pixel-months.
+The gradient-boosted trees build one feature table across the whole cube before
+subsampling, and predict over every row of it, so that run needs roughly 22 GB of
+memory. Capping the training rows does not avoid it.
+
+So the resolution question is asked on a smaller area instead.
+`sunshine_coast_core` is a 4 by 4 km box nested inside the Sunshine Coast AOI,
+built at both 100 m and 10 m over the same months. Only the resolution differs.
+
+One thing had to be fixed first. Spatial blocks were specified in pixels, so a 20
+pixel block meant 2 km at 100 m but 200 m at 10 m. The finer split would have put
+held-out blocks well inside the range over which NDVI is autocorrelated, leaked
+across the split, and flattered the 10 m arm for the wrong reason. Blocks and
+buffers are now given in metres and converted per cube. At 100 m they resolve to
+exactly the 20 pixel block and 2 pixel buffer behind every result above, checked
+against the cached cubes so the published numbers are unaffected.
+
+A 4 km box cannot hold enough 2 km blocks, so both arms of this comparison use
+500 m blocks with a 100 m buffer. That makes its numbers internal to the
+comparison and not comparable with the headline table.
+
 ## Repository layout
 
 ```
@@ -302,8 +326,11 @@ server and a push to `main` redeploys it.
 
 - Extend drivers: rainfall is wired in (SILO) but did not help; try soil moisture
   (ERA5-Land), fire (MODIS), and terrain from a DEM.
-- Run at native 10 m on one AOI (a config profile) to see whether field-scale
-  detail changes the picture.
+- Report the 10 m against 100 m comparison on `sunshine_coast_core` (see
+  Resolution above for why it runs on a 4 km box rather than the full AOI).
+- Chunk the gradient-boosted-trees feature table so native resolution can run on
+  a full-sized area, and train the ConvLSTM on patches rather than whole frames,
+  which is the other thing standing between this and 10 m at scale.
 
 ## Development
 
