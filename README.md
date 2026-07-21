@@ -14,8 +14,8 @@ contrasting biomes (subtropical, tropical rainforest, arid, alpine) at 100 m,
 with three models (gradient-boosted trees, a ConvLSTM, and a GraphCast-style GNN)
 plus a stacked ensemble. On the 11-year Sentinel-2 record the models beat
 persistence everywhere but only beat climatology in arid Alice Springs. On the
-40-year Landsat record they beat climatology in every biome (see Results). Still
-to come: native 10 m resolution.
+40-year Landsat record they beat climatology in every biome (see Results).
+Native 10 m was tested on a 4 km box and did not improve on 100 m.
 
 ## Problem
 
@@ -208,6 +208,41 @@ A 4 km box cannot hold enough 2 km blocks, so both arms of this comparison use
 500 m blocks with a 100 m buffer. That makes its numbers internal to the
 comparison and not comparable with the headline table.
 
+Headline cell, each model against the baselines of its own arm:
+
+| Model | 100 m RMSE | skill vs climatology | 10 m RMSE | skill vs climatology |
+|-------|------------|----------------------|-----------|----------------------|
+| GBT | 0.1098 | +0.3% | 0.1150 | +0.2% |
+| ConvLSTM | 0.1193 | -8.3% | 0.1125 | +2.4% |
+| GNN | 0.1053 | +4.4% | 0.1135 | +1.5% |
+| ensemble | 0.1053 | +4.4% | 0.1097 | +4.8% |
+
+Four decimals here because the differences are smaller than the three used
+elsewhere would show. Baselines: climatology 0.1101 at 100 m against 0.1152 at
+10 m, persistence 0.1550 against 0.1577.
+
+Native resolution does not help. Every predictor has a higher absolute error at
+10 m, the two baselines included, which is what you would expect when each pixel
+covers a hundredth of the ground and carries proportionally more sensor noise and
+cloud-edge contamination. Absolute errors are therefore not the thing to compare;
+skill against each arm's own baselines is. On that measure the models are flat or
+slightly worse at 10 m. The GNN gives up most of its advantage and the
+gradient-boosted trees do not move.
+
+The exception is the ConvLSTM, and it is the one that makes sense. It is the only
+model here whose inductive bias is spatial, and it is the only one that improves,
+from worse than climatology at 100 m to slightly better at 10 m. Finer pixels
+give its convolutions real spatial structure to work with instead of a field that
+has already been averaged smooth. On a single 4 km box that is a suggestion worth
+following up, not a result.
+
+Two caveats. A failed scene search cost the 100 m cube November and December
+2024. Both months fall in the training period rather than the test window, so
+both arms are scored on identical months, and the loss handicaps the 100 m arm,
+which is the arm that did better. The two grids also differ slightly in extent,
+4.70 by 4.70 km against 4.64 by 4.54 km, because the bounding box is reprojected
+before being snapped to each resolution.
+
 ## Repository layout
 
 ```
@@ -326,11 +361,12 @@ server and a push to `main` redeploys it.
 
 - Extend drivers: rainfall is wired in (SILO) but did not help; try soil moisture
   (ERA5-Land), fire (MODIS), and terrain from a DEM.
-- Report the 10 m against 100 m comparison on `sunshine_coast_core` (see
-  Resolution above for why it runs on a 4 km box rather than the full AOI).
+- Follow up the one 10 m result that moved: the ConvLSTM improved at native
+  resolution while everything else did not. Worth testing on a second area before
+  reading anything into it.
 - Chunk the gradient-boosted-trees feature table so native resolution can run on
   a full-sized area, and train the ConvLSTM on patches rather than whole frames,
-  which is the other thing standing between this and 10 m at scale.
+  which is what stands between this and 10 m at scale.
 
 ## Development
 

@@ -18,13 +18,16 @@ imagery:                        # DEA analysis-ready surface reflectance profile
     time_range: "1988-01-01/2026-06-30"
 
 build:                          # settings for scripts/build_cube.py
-  profile: landsat              # sentinel2 (v1) | landsat (v2, longer record)
+  profile: sentinel2            # sentinel2 (v1) | landsat (v2, longer record)
   resolution_m: 100             # 10 (S2) / 30 (Landsat) native; 100 = scaled-back local
   biomes: [sunshine_coast_hinterland, daintree, alice_springs, kosciuszko]
   cache_dir: data               # cubes at {cache_dir}/cube_{profile}_{resolution_m}m_{biome}.nc
-  max_train_rows: null          # cap GBT training rows; set ~3000000 at 10 m to stay tractable
+  max_train_rows: null          # cap GBT training rows; 3000000 at 10 m to stay tractable
   run_name: null                # set for side experiments so their results get
                                 # their own filenames and skip the demo artifacts
+                                # (the resolution experiment used: profile sentinel2,
+                                #  biomes [sunshine_coast_core], run_name resolution,
+                                #  block_size_m 500, buffer_m 100, and 100 m then 10 m)
 
 drivers_build:                  # settings for scripts/build_drivers.py
   use: false                     # ablation: lagged rainfall did not help one-step NDVI; off by default
