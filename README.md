@@ -107,10 +107,10 @@ Headline cell (future time, seen locations), RMSE across four biomes:
 
 | Biome | persistence | climatology | GBT | ConvLSTM | GNN | ensemble |
 |-------|-------------|-------------|-----|----------|-----|----------|
-| Sunshine Coast (subtropical) | 0.151 | 0.109 | 0.110 | 0.120 | 0.110 | 0.111 |
-| Daintree (tropical rainforest) | 0.250 | 0.168 | 0.184 | 0.179 | 0.191 | 0.189 |
-| Alice Springs (arid) | 0.071 | 0.087 | 0.069 | 0.069 | 0.064 | 0.071 |
-| Kosciuszko (alpine) | 0.122 | 0.078 | 0.083 | 0.106 | 0.090 | 0.084 |
+| Sunshine Coast (subtropical) | 0.151 | 0.109 | 0.110 | 0.114 | 0.110 | 0.111 |
+| Daintree (tropical rainforest) | 0.250 | 0.168 | 0.184 | 0.173 | 0.188 | 0.186 |
+| Alice Springs (arid) | 0.071 | 0.087 | 0.069 | 0.066 | 0.063 | 0.067 |
+| Kosciuszko (alpine) | 0.121 | 0.078 | 0.083 | 0.100 | 0.090 | 0.084 |
 
 What matters is where each method wins. In the three strongly seasonal biomes
 (subtropical, rainforest, alpine) climatology is very hard to beat: the models
@@ -121,16 +121,16 @@ Arid Alice Springs is the exception, and the interesting one. There the seasonal
 cycle is weak, so climatology is worse than persistence: desert vegetation
 responds to episodic rain, not the calendar. All three models beat climatology,
 because recent NDVI carries the signal of a rain pulse that a monthly average
-cannot. The GNN wins by the widest margin (0.064 against climatology's 0.087),
+cannot. The GNN wins by the widest margin (0.063 against climatology's 0.087),
 which fits: desert rain falls in spatially coherent bands, so letting neighbouring
 pixels share information through the graph pays off exactly where it should.
 
-![Skill vs climatology by biome](docs/figures/biome_skill_vs_climatology.png)
+![Skill vs climatology by biome](docs/figures/biome_skill_vs_climatology_sentinel2_100m.png)
 
 The arid green-up makes the point. Climatology stays flat while the models track
 the pulse from recent momentum:
 
-![Alice Springs forecast](docs/figures/biome_alice_springs_forecast.png)
+![Alice Springs forecast](docs/figures/biome_alice_springs_forecast_sentinel2_100m.png)
 
 So forecastability is not uniform across the continent. It depends on how
 seasonal the vegetation is, and the honest evaluation surfaces that instead of
@@ -182,7 +182,7 @@ Absolute errors are not comparable between the two records, since Sentinel-2 and
 Landsat are different instruments with different compositing. The honest
 comparison is each model against its own baselines within each record.
 
-![Skill vs climatology by biome, Landsat](docs/figures/biome_skill_vs_climatology_landsat.png)
+![Skill vs climatology by biome, Landsat](docs/figures/biome_skill_vs_climatology_landsat_100m.png)
 
 ## Repository layout
 
@@ -288,7 +288,7 @@ server and a push to `main` redeploys it.
 
 ## Evaluation notes
 
-- Splits are honest in space and time; skill is always measured against the
+- Splits do not leak in space or time; skill is always measured against the
   baselines on the same folds.
 - Climatology is fit on training data only, per fold.
 - The ConvLSTM is a convolutional model, so it still sees held-out blocks as

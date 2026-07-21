@@ -235,7 +235,7 @@ with st.expander("How to read this"):
 - Forecasts are **out of sample**. Each fold trains only on months before its test block, with an
   embargo gap, and a buffer ring separates training pixels from held-out pixel blocks.
 - The interval is **conformal**. Its width is the chosen quantile of absolute errors on earlier
-  folds, so observed coverage near the nominal level means the uncertainty is honest.
+  folds, so observed coverage near the nominal level means the intervals are calibrated.
 - Absolute errors are not comparable between Sentinel-2 and Landsat, since they are different
   instruments with different compositing. Compare each model to its own baselines within one record.
 - The grid is coarsened by a factor of two for this demo, so map numbers differ slightly from the

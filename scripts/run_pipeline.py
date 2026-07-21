@@ -2,8 +2,10 @@
 
 Loops over build.biomes, runs the walk-forward + spatial-block evaluation for
 each, prints a per-biome table, and writes a cross-biome comparison
-(docs/figures/biome_skill_vs_climatology.png), per-biome forecast figures, and
-docs/biome_results.csv. ConvLSTM is skipped with a message if PyTorch is not
+figure, per-biome forecast figures, and a results CSV. Every output is suffixed
+with the build tag (profile and resolution, for example sentinel2_100m), so
+running a second profile adds files rather than overwriting the first one's
+results. ConvLSTM is skipped with a message if PyTorch is not
 installed. Drivers are used only when drivers_build.use is true and a per-biome
 driver cache exists.
 
@@ -105,17 +107,18 @@ def main():
         all_res.append(res)
         head = res[(res.time == "future") & (res.space == "seen")].groupby("predictor")["rmse"].mean().sort_values()
         print("  headline RMSE:", {k: round(v, 4) for k, v in head.items()})
-        _plot_forecast(ndvi, folds, oos, biome)
+        _plot_forecast(ndvi, folds, oos, biome, tag)
         save_app_data(ndvi, oos, folds, strain, biome, tag, ROOT / "docs" / "app_data", results=res)
 
     if not all_res:
         raise SystemExit("No cubes found — run scripts/build_cube.py first.")
 
     combined = pd.concat(all_res, ignore_index=True)
-    combined.to_csv(ROOT / "docs" / "biome_results.csv", index=False)
+    results_csv = ROOT / "docs" / f"biome_results_{tag}.csv"
+    combined.to_csv(results_csv, index=False)
     _print_summary(combined, build["biomes"])
-    _plot_biome_comparison(combined, build["biomes"])
-    print(f"\nfigures -> {FIG_DIR}   results -> docs/biome_results.csv")
+    _plot_biome_comparison(combined, build["biomes"], tag)
+    print(f"\nfigures -> {FIG_DIR}   results -> docs/{results_csv.name}")
 
 
 def _best_pixel(ndvi):
@@ -137,7 +140,7 @@ def _print_summary(res, biomes):
     print("  " + table.round(4).to_string().replace("\n", "\n  "))
 
 
-def _plot_forecast(ndvi, folds, oos, biome):
+def _plot_forecast(ndvi, folds, oos, biome, tag):
     py, px = _best_pixel(ndvi)
     test_all = _test_union(folds)
     t = ndvi["time"].sel(time=test_all).values
@@ -150,10 +153,10 @@ def _plot_forecast(ndvi, folds, oos, biome):
         ax.plot(t, oos[model].sel(time=test_all).isel(y=py, x=px), color=MODEL_COLORS.get(model, "#888888"), lw=2, label=model)
     ax.set_title(f"{biome}: forecasts vs actual (pixel {py},{px})")
     ax.set_ylabel("NDVI"); ax.legend(fontsize=7)
-    fig.tight_layout(); fig.savefig(FIG_DIR / f"biome_{biome}_forecast.png", dpi=120); plt.close(fig)
+    fig.tight_layout(); fig.savefig(FIG_DIR / f"biome_{biome}_forecast_{tag}.png", dpi=120); plt.close(fig)
 
 
-def _plot_biome_comparison(res, biomes):
+def _plot_biome_comparison(res, biomes, tag):
     head = res[(res.time == "future") & (res.space == "seen")]
     models = [m for m in ("gbt", "convlstm", "gnn", "ensemble") if m in set(head["predictor"])]
     table = (head[head["predictor"].isin(models)]
@@ -166,7 +169,7 @@ def _plot_biome_comparison(res, biomes):
     ax.set_xlabel("")
     ax.set_title("Do the models beat climatology? Skill vs climatology by biome (headline cell)")
     ax.tick_params(axis="x", rotation=15)
-    fig.tight_layout(); fig.savefig(FIG_DIR / "biome_skill_vs_climatology.png", dpi=130); plt.close(fig)
+    fig.tight_layout(); fig.savefig(FIG_DIR / f"biome_skill_vs_climatology_{tag}.png", dpi=130); plt.close(fig)
 
 
 if __name__ == "__main__":
