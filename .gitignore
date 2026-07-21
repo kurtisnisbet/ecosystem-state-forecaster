@@ -38,6 +38,10 @@ artifacts/
 logs/
 *.log
 
+# ── Working notes kept locally, not part of the project ───
+Ecosystem State Forecaster.md
+humaniser.md
+
 # ── OS / editor cruft ─────────────────────────────────────
 .DS_Store
 Thumbs.db
